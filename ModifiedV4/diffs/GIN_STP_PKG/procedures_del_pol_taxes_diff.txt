@@ -1,0 +1,16 @@
+--- GIN_STP_PKG_HERITAGE_procedures_del_pol_taxes.sql
++++ GIN_STP_PKG_NEW_GEMINIA_procedures_del_pol_taxes.sql
+@@ -1,7 +1,7 @@
+ PROCEDURE del_pol_taxes (v_trnt_code IN VARCHAR2, v_pol_code IN NUMBER)
+-   IS
+-   BEGIN
+-      DELETE      gin_policy_taxes
+-            WHERE ptx_trac_trnt_code = v_trnt_code
+-              AND ptx_pol_batch_no = v_pol_code;
+-   END;
++    IS
++    BEGIN
++        DELETE gin_policy_taxes
++         WHERE     ptx_trac_trnt_code = v_trnt_code
++               AND ptx_pol_batch_no = v_pol_code;
++    END;

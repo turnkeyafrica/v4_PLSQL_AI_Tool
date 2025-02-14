@@ -1,0 +1,114 @@
+--- GIN_STP_PKG_HERITAGE_procedures_pop_quot_taxes.sql
++++ GIN_STP_PKG_NEW_GEMINIA_procedures_pop_quot_taxes.sql
+@@ -1,51 +1,64 @@
+ PROCEDURE pop_quot_taxes (v_quot_code IN NUMBER)
+-   IS
+-      x   NUMBER := 0;
++    IS
++        x   NUMBER := 0;
+ 
+-      CURSOR qprod
+-      IS
+-         SELECT *
+-           FROM gin_quot_products
+-          WHERE qp_quot_code = v_quot_code;
++        CURSOR qprod IS
++            SELECT *
++              FROM gin_quot_products
++             WHERE qp_quot_code = v_quot_code;
+ 
+-      CURSOR taxes (v_prod_code IN NUMBER, v_qp_code IN NUMBER)
+-      IS
+-         SELECT *
+-           FROM gin_taxes_types_view
+-          WHERE (   scl_code IS NULL
+-                 OR scl_code IN (SELECT clp_scl_code
+-                                   FROM gin_product_sub_classes
+-                                  WHERE clp_pro_code = v_prod_code)
+-                )
+-            AND trnt_mandatory = 'Y'
+-            AND trnt_type IN ('UTX', 'SD', 'UTL', 'EX','PRM-VAT','ROAD','HEALTH')
+-            AND taxr_trnt_code NOT IN (SELECT qpt_trac_trnt_code
+-                                         FROM gin_quot_product_taxes
+-                                        WHERE qpt_qp_code = v_qp_code)
+-            AND NVL (trnt_apply_nb, 'N') = 'Y'
+-            AND trnt_code NOT IN (SELECT petx_trnt_code
+-                                    FROM gin_product_excluded_taxes
+-                                   WHERE petx_pro_code = v_prod_code);
+-   BEGIN
+-      FOR qp IN qprod
+-      LOOP
+-         FOR txs IN taxes (qp.qp_pro_code, qp.qp_code)
+-         LOOP
+-            x := NVL (x, 0) + 1;
++        CURSOR taxes (v_prod_code IN NUMBER, v_qp_code IN NUMBER)
++        IS
++            SELECT *
++              FROM gin_taxes_types_view
++             WHERE     (   scl_code IS NULL
++                        OR scl_code IN (SELECT clp_scl_code
++                                          FROM gin_product_sub_classes
++                                         WHERE clp_pro_code = v_prod_code))
++                   AND trnt_mandatory = 'Y'
++                   AND trnt_type IN ('UTX',
++                                     'SD',
++                                     'UTL',
++                                     'EX',
++                                     'PRM-VAT',
++                                     'ROAD',
++                                     'HEALTH')
++                   AND taxr_trnt_code NOT IN (SELECT qpt_trac_trnt_code
++                                                FROM gin_quot_product_taxes
++                                               WHERE qpt_qp_code = v_qp_code)
++                   AND NVL (trnt_apply_nb, 'N') = 'Y'
++                   AND trnt_code NOT IN (SELECT petx_trnt_code
++                                           FROM gin_product_excluded_taxes
++                                          WHERE petx_pro_code = v_prod_code);
++    BEGIN
++        FOR qp IN qprod
++        LOOP
++            FOR txs IN taxes (qp.qp_pro_code, qp.qp_code)
++            LOOP
++                x := NVL (x, 0) + 1;
+ 
+-            INSERT INTO gin_quot_product_taxes
+-                        (qpt_code, qpt_trac_trnt_code,
+-                         qpt_rate, qpt_rate_type, qpt_trnt_renewal_endos,
+-                         qpt_taxr_code, qpt_qp_code, qpt_quot_code,
+-                         qpt_tax_type, qpt_tl_lvl_code, qpt_risk_prod_level
+-                        )
+-                 VALUES (gin_qpt_code_seq.NEXTVAL, txs.trnt_code,
+-                         txs.taxr_rate, txs.taxr_rate_type, NULL,
+-                         txs.taxr_code, qp.qp_code, v_quot_code,
+-                         'UTX', 'UP', 'P'
+-                        );
+-         END LOOP;
+-      END LOOP;
+-   END;
+-
+---
++                INSERT INTO gin_quot_product_taxes (qpt_code,
++                                                    qpt_trac_trnt_code,
++                                                    qpt_rate,
++                                                    qpt_rate_type,
++                                                    qpt_trnt_renewal_endos,
++                                                    qpt_taxr_code,
++                                                    qpt_qp_code,
++                                                    qpt_quot_code,
++                                                    qpt_tax_type,
++                                                    qpt_tl_lvl_code,
++                                                    qpt_risk_prod_level)
++                     VALUES (gin_qpt_code_seq.NEXTVAL,
++                             txs.trnt_code,
++                             txs.taxr_rate,
++                             txs.taxr_rate_type,
++                             NULL,
++                             txs.taxr_code,
++                             qp.qp_code,
++                             v_quot_code,
++                             'UTX',
++                             'UP',
++                             'P');
++            END LOOP;
++        END LOOP;
++    END;

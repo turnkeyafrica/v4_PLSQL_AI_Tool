@@ -1,0 +1,612 @@
+PROCEDURE reinstate_section09052017 (
+--      v_pol_batch_no        NUMBER,
+--      v_ipu_code       IN   NUMBER,
+--      v_date                DATE,
+--      v_user           IN   VARCHAR2
+--   )
+--   IS
+--      v_cnt              NUMBER;
+--      v_new_ipu_code     NUMBER;
+--      v_new_polin_code   NUMBER;
+--      v_exp_flag         VARCHAR2 (2);
+--      v_open_cover       VARCHAR2 (2);
+--      v_trans_no         NUMBER;
+--      v_end_no           VARCHAR2 (45);
+--      v_batchno          NUMBER;
+--      next_ggts_trans_no    NUMBER;
+--      v_tran_ref_no      VARCHAR2 (45);
+--      v_serial            VARCHAR2 (45);
+
+--      CURSOR pol_cur
+--      IS
+--         SELECT *
+--           FROM gin_policies
+--          WHERE pol_batch_no = v_pol_batch_no;
+
+--      CURSOR rsk_cur
+--      IS
+--         SELECT *
+--           FROM gin_insured_property_unds
+--          WHERE ipu_code = v_ipu_code;
+
+--      CURSOR sect_cur
+--      IS
+--         SELECT *
+--           FROM gin_policy_insured_limits
+--          WHERE pil_ipu_code = v_ipu_code AND NVL (pil_expired, 'N') = 'Y';
+
+--      CURSOR non_exp_sect
+--      IS
+--         SELECT *
+--           FROM gin_policy_insured_limits
+--          WHERE pil_ipu_code = v_ipu_code;
+--   --AND NVL(PIL_EXPIRED,'N') = 'N';
+--    --AND PIL_SECT_CODE=v_sect_code;
+--   BEGIN
+--      -- RAISE_APPLICATION_ERROR(-20001,'HERE');
+--      SELECT COUNT (1)
+--        INTO v_cnt
+--        FROM gin_policies
+--       WHERE pol_policy_no = (SELECT pol_policy_no
+--                                FROM gin_policies
+--                               WHERE pol_batch_no = v_pol_batch_no)
+--         AND pol_authosrised = 'N';
+
+--      IF NVL (v_cnt, 0) > 0
+--      THEN
+--         raise_error
+--            ('There are unauthorised transactions on this policy,Reinstatement could not be completed'
+--            );
+--      ELSE
+--         FOR i IN pol_cur
+--         LOOP
+--            BEGIN
+--               get_ren_policy_no (i.pol_pro_code,
+--                                  i.pol_pro_sht_desc,
+--                                  i.pol_brn_code,
+--                                  i.pol_brn_sht_desc,
+--                                  i.pol_binder_policy,
+--                                  i.pol_policy_type,
+--                                  i.pol_policy_no,
+--                                  v_end_no,
+--                                  v_batchno
+--                                 );
+--            EXCEPTION
+--               WHEN OTHERS
+--               THEN
+--                  raise_error ('UNABLE TO GENERATE THE POLICY NUMBER...');
+--            END;
+
+--            BEGIN
+----                    RAISE_ERROR('POLICY NO'||I.POL_POLICY_NO||' ENDORSE '||v_end_no||' batch '||v_batchno);
+--               INSERT INTO gin_policies
+--                           (pol_policy_no, pol_ren_endos_no, pol_batch_no,
+--                            pol_agnt_agent_code, pol_agnt_sht_desc,
+--                            pol_bind_code, pol_wef_dt, pol_wet_dt,
+--                            pol_uw_year, pol_policy_status,
+--                            pol_inception_dt, pol_cur_code, pol_prepared_by,
+--                            pol_prepared_date, pol_policy_type,
+--                            pol_client_policy_number, pol_brn_code,
+--                            pol_cur_rate, pol_coinsurance,
+--                            pol_coinsure_leader, pol_cur_symbol,
+--                            pol_brn_sht_desc, pol_prp_code,
+--                            pol_current_status, pol_authosrised,
+--                            pol_post_status, pol_inception_uwyr,
+--                            pol_pro_code, pol_your_ref,
+--                            pol_prop_holding_co_prp_code,
+--                            pol_oth_int_parties, pol_pro_sht_desc,
+--                            pol_prev_batch_no, pol_uwyr_length,
+--                            pol_binder_policy, pol_renewable,
+--                            pol_policy_cover_to, pol_policy_cover_from,
+--                            pol_coinsurance_share, pol_renewal_dt,
+--                            pol_trans_eff_wet, pol_ri_agent_comm_rate,
+--                            pol_ri_agnt_sht_desc,
+--                            pol_ri_agnt_agent_code, pol_policy_doc,
+--                            pol_commission_allowed,pol_admin_fee_allowed ,POL_CASHBACK_APPL                        --,
+--                           --POL_INTRO_CODE,
+--                           --POL_EXCH_RATE_FIXED
+--                           )
+--                    VALUES (i.pol_policy_no, v_end_no, v_batchno,
+--                            i.pol_agnt_agent_code, i.pol_agnt_sht_desc,
+--                            i.pol_bind_code, i.pol_wef_dt, i.pol_wet_dt,
+--                            i.pol_uw_year, 'EN',
+--                            i.pol_inception_dt, i.pol_cur_code, v_user,
+--                            TRUNC (SYSDATE), NVL (i.pol_policy_type, 'N'),
+--                            i.pol_client_policy_number, i.pol_brn_code,
+--                            i.pol_cur_rate, i.pol_coinsurance,
+--                            i.pol_coinsure_leader, i.pol_cur_symbol,
+--                            i.pol_brn_sht_desc, i.pol_prp_code,
+--                            'D', 'N',
+--                            'N', i.pol_inception_uwyr,
+--                            i.pol_pro_code, i.pol_your_ref,
+--                            i.pol_prop_holding_co_prp_code,
+--                            i.pol_oth_int_parties, i.pol_pro_sht_desc,
+--                            i.pol_prev_batch_no, i.pol_uwyr_length,
+--                            i.pol_binder_policy, i.pol_renewable,
+--                            i.pol_policy_cover_to, i.pol_policy_cover_from,
+--                            i.pol_coinsurance_share, i.pol_renewal_dt,
+--                            i.pol_trans_eff_wet, i.pol_ri_agent_comm_rate,
+--                            i.pol_ri_agnt_sht_desc,
+--                            i.pol_ri_agnt_agent_code, i.pol_policy_doc,
+--                            NVL (i.pol_commission_allowed, 'Y'),I.pol_admin_fee_allowed  ,I.POL_CASHBACK_APPL          --,
+--                           --I.POL_INTRO_CODE,
+--                           --I.POL_EXCH_RATE_FIXED
+--                           );
+--            EXCEPTION
+--               WHEN OTHERS
+--               THEN
+--                  raise_error (   'ERROR CREATING POLICY RECORD..'
+--                               || SQLERRM (SQLCODE)
+--                              );
+--            END;
+
+--            BEGIN
+--               SELECT TO_NUMBER (   TO_CHAR (SYSDATE, 'RRRR')
+--                                 || ggt_trans_no_seq.NEXTVAL
+--                                )
+--                 INTO v_trans_no
+--                 FROM DUAL;
+
+--               INSERT INTO gin_gis_transactions
+--                           (ggt_doc_ref, ggt_trans_no, ggt_pol_policy_no,
+--                            ggt_cmb_claim_no, ggt_pro_code, ggt_pol_batch_no,
+--                            ggt_pro_sht_desc, ggt_btr_trans_code,
+--                            ggt_done_by, ggt_done_date,
+--                            ggt_client_policy_number, ggt_uw_clm_tran,
+--                            ggt_trans_date, ggt_trans_authorised,
+--                            ggt_trans_authorised_by,
+--                            ggt_trans_authorise_date, ggt_old_tran_no,
+--                            ggt_effective_date
+--                           )
+--                    VALUES (i.pol_your_ref, v_trans_no, i.pol_policy_no,
+--                            NULL, i.pol_pro_code, v_batchno,
+--                            i.pol_pro_sht_desc, 'EN',
+--                            v_user, TRUNC (SYSDATE),
+--                            i.pol_policy_no, 'U',
+--                            TRUNC (SYSDATE), 'N',
+--                            NULL,
+--                            NULL, NULL,
+--                            TRUNC (SYSDATE)
+--                           );
+--            EXCEPTION
+--               WHEN OTHERS
+--               THEN
+--                  raise_error ('ERROR CREATING TRANSACTION RECORD..');
+--            END;
+--         
+--         begin
+--            v_tran_ref_no :=
+--                           gin_sequences_pkg.get_number_format
+--                                                           ('BARCODE',
+--                                                            i.pol_pro_code,
+--                                                            i.pol_brn_code,
+--                                                            TO_NUMBER (TO_CHAR (SYSDATE,
+--                                                                                'RRRR'
+--                                                                               )
+--                                                                      ),
+--                                                            'EN',
+--                                                            v_serial
+--                                                           );
+--                                                           
+--          EXCEPTION
+--                        WHEN OTHERS
+--                        THEN
+--                           raise_error ( 'unable to generate transmittal number.Contact the system administrator...');
+--          END;
+--            
+--          BEGIN
+--            SELECT TO_NUMBER (TO_CHAR (SYSDATE, 'RRRR'))
+--                   || ggts_tran_no_seq.NEXTVAL
+--              INTO next_ggts_trans_no
+--              FROM DUAL;
+--            INSERT INTO GIN_GIS_TRANSMITALS (GGTS_TRAN_NO,
+--                                                                    GGTS_POL_POLICY_NO,
+--                                                                    GGTS_CMB_CLAIM_NO,
+--                                                                    GGTS_POL_BATCH_NO ,
+--                                                                    GGTS_DONE_BY ,
+--                                                                    GGTS_DONE_DATE ,
+--                                                                    GGTS_UW_CLM_TRAN ,
+--                                                                    GGTS_POL_RENEWAL_BATCH ,
+--                                                                    GGTS_TRAN_REF_NO,GGTS_IPAY_ALPHANUMERIC)
+--                 VALUES ( next_ggts_trans_no,
+--                         I.pol_policy_no,
+--                         NULL,
+--                         v_batchno,
+--                         v_user,
+--                         SYSDATE,
+--                         'U',
+--                         null,
+--                         v_tran_ref_no,'Y');
+--         EXCEPTION
+--            WHEN OTHERS
+--            THEN
+--               raise_error (
+--                  'Error unable to creaete a transaction record. Contact the system administrator...');
+--         END;
+
+--            BEGIN
+--               SELECT NVL (pro_expiry_period, 'Y'), NVL (pro_open_cover, 'N')
+--                 INTO v_exp_flag, v_open_cover
+--                 FROM gin_products
+--                WHERE pro_code = i.pol_pro_code;
+--            EXCEPTION
+--               WHEN OTHERS
+--               THEN
+--                  raise_error ('ERROR SECURING OPEN COVER STATUS..');
+--            END;
+
+--            BEGIN
+--               SELECT NVL (pro_expiry_period, 'Y'), NVL (pro_open_cover, 'N')
+--                 INTO v_exp_flag, v_open_cover
+--                 FROM gin_products
+--                WHERE pro_code = i.pol_pro_code;
+--            EXCEPTION
+--               WHEN OTHERS
+--               THEN
+--                  raise_error ('ERROR SECURING OPEN COVER STATUS..');
+--            END;
+
+--            BEGIN
+--               SELECT    TO_NUMBER (TO_CHAR (SYSDATE, 'RRRR'))
+--                      || polin_code_seq.NEXTVAL
+--                 INTO v_new_polin_code
+--                 FROM DUAL;
+
+--               INSERT INTO gin_policy_insureds
+--                           (polin_code, polin_pol_policy_no,
+--                            polin_pol_ren_endos_no, polin_pol_batch_no,
+--                            polin_prp_code, polin_new_insured
+--                           )
+--                    VALUES (v_new_polin_code, i.pol_policy_no,
+--                            v_end_no, v_batchno,
+--                            i.pol_prp_code, 'Y'
+--                           );
+--            EXCEPTION
+--               WHEN OTHERS
+--               THEN
+--                  raise_error ('ERROR SAVING INSURED DETAILS..');
+--            END;
+
+--            FOR j IN rsk_cur
+--            LOOP
+--               BEGIN
+--                  SELECT    TO_NUMBER (TO_CHAR (SYSDATE, 'RRRR'))
+--                         || gin_ipu_code_seq.NEXTVAL
+--                    INTO v_new_ipu_code
+--                    FROM DUAL;
+
+--                  INSERT INTO gin_insured_property_unds
+--                              (ipu_code, ipu_property_id,
+--                               ipu_item_desc, ipu_qty, ipu_value,
+--                               ipu_wef, ipu_wet, ipu_pol_policy_no,
+--                               ipu_pol_ren_endos_no, ipu_pol_batch_no,
+--                               ipu_earth_quake_cover,
+--                               ipu_earth_quake_prem, ipu_location,
+--                               ipu_polin_code, ipu_sec_scl_code,
+--                               ipu_ncd_status, ipu_related_ipu_code,
+--                               ipu_prorata, ipu_gp, ipu_fap,
+--                               ipu_prev_ipu_code, ipu_ncd_level,
+--                               ipu_quz_code, ipu_quz_sht_desc,
+--                               ipu_sht_desc,
+--                               ipu_id,
+--                               ipu_bind_code, ipu_excess_rate,
+--                               ipu_excess_type, ipu_excess_rate_type,
+--                               ipu_excess_min, ipu_excess_max,
+--                               ipu_prereq_ipu_code, ipu_escalation_rate,
+--                               ipu_comm_rate, ipu_prev_batch_no,
+--                               ipu_cur_code, ipu_relr_code,
+--                               ipu_relr_sht_desc, ipu_pol_est_max_loss,
+--                               ipu_eff_wef, ipu_eff_wet, ipu_retro_cover,
+--                               ipu_retro_wef, ipu_covt_code,
+--                               ipu_covt_sht_desc, ipu_si_diff,
+--                               ipu_terr_code, ipu_terr_desc,
+--                               ipu_from_time, ipu_to_time,
+--                               ipu_mar_cert_no, ipu_comp_retention,
+--                               ipu_gross_comp_retention,
+--                               ipu_com_retention_rate, ipu_prp_code,
+--                               ipu_tot_endos_prem_dif, ipu_tot_gp,
+--                               ipu_tot_value, ipu_ri_agnt_com_rate,
+--                               ipu_cover_days, ipu_bp, ipu_prev_prem,
+--                               ipu_ri_agnt_comm_amt, ipu_tot_fap,
+--                               ipu_max_exposure, ipu_status, ipu_uw_yr,
+--                               ipu_tot_first_loss,
+--                               ipu_accumulation_limit,
+--                               ipu_compute_max_exposure,
+--                               ipu_reinsure_amt, ipu_paid_premium,
+--                               ipu_trans_count, ipu_paid_tl,
+--                               ipu_inception_uwyr, ipu_trans_eff_wet,
+--                               ipu_eml_based_on, ipu_aggregate_limits,
+--                               ipu_rc_sht_desc, ipu_rc_code,
+--                               ipu_survey_date, ipu_item_details,
+--                               ipu_prev_tot_fap, ipu_prev_fap,
+--                               ipu_prev_reinsure_amt, ipu_prev_status,
+--                               ipu_rs_code, ipu_rescue_mem,
+--                               ipu_rescue_charge,IPU_CASHBACK_APPL, IPU_CASHBACK_LEVEL
+--                              )
+--                       VALUES (TO_NUMBER (v_new_ipu_code), j.ipu_property_id,
+--                               j.ipu_item_desc, j.ipu_qty, j.ipu_value,
+--                               v_date, j.ipu_wet, j.ipu_pol_policy_no,
+--                               v_end_no, v_batchno,
+--                               j.ipu_earth_quake_cover,
+--                               j.ipu_earth_quake_prem, j.ipu_location,
+--                               v_new_polin_code, j.ipu_sec_scl_code,
+--                               j.ipu_ncd_status, j.ipu_related_ipu_code,
+--                               j.ipu_prorata, j.ipu_gp, j.ipu_fap,
+--                               j.ipu_prev_ipu_code, j.ipu_ncd_level,
+--                               j.ipu_quz_code, j.ipu_quz_sht_desc,
+--                               j.ipu_sht_desc,
+--                                  TO_NUMBER (TO_CHAR (SYSDATE, 'RRRR'))
+--                               || gin_ipu_id_seq.NEXTVAL,
+--                               j.ipu_bind_code, j.ipu_excess_rate,
+--                               j.ipu_excess_type, j.ipu_excess_rate_type,
+--                               j.ipu_excess_min, j.ipu_excess_max,
+--                               j.ipu_prereq_ipu_code, j.ipu_escalation_rate,
+--                               j.ipu_comm_rate, v_batchno,
+--                               j.ipu_cur_code, j.ipu_relr_code,
+--                               j.ipu_relr_sht_desc, j.ipu_pol_est_max_loss,
+--                               v_date, j.ipu_eff_wet, j.ipu_retro_cover,
+--                               j.ipu_retro_wef, j.ipu_covt_code,
+--                               j.ipu_covt_sht_desc, j.ipu_si_diff,
+--                               j.ipu_terr_code, j.ipu_terr_desc,
+--                               j.ipu_from_time, j.ipu_to_time,
+--                               j.ipu_mar_cert_no, j.ipu_comp_retention,
+--                               j.ipu_gross_comp_retention,
+--                               j.ipu_com_retention_rate, j.ipu_prp_code,
+--                               j.ipu_tot_endos_prem_dif, j.ipu_tot_gp,
+--                               j.ipu_tot_value, j.ipu_ri_agnt_com_rate,
+--                               j.ipu_cover_days, j.ipu_bp, j.ipu_prev_prem,
+--                               j.ipu_ri_agnt_comm_amt, j.ipu_tot_fap,
+--                               j.ipu_max_exposure, j.ipu_status, j.ipu_uw_yr,
+--                               j.ipu_tot_first_loss,
+--                               j.ipu_accumulation_limit,
+--                               j.ipu_compute_max_exposure,
+--                               j.ipu_reinsure_amt, j.ipu_paid_premium,
+--                               j.ipu_trans_count, j.ipu_paid_tl,
+--                               j.ipu_inception_uwyr, j.ipu_trans_eff_wet,
+--                               j.ipu_eml_based_on, j.ipu_aggregate_limits,
+--                               j.ipu_rc_sht_desc, j.ipu_rc_code,
+--                               j.ipu_survey_date, j.ipu_item_details,
+--                               j.ipu_prev_tot_fap, j.ipu_prev_fap,
+--                               j.ipu_prev_reinsure_amt, 'RE',
+--                               j.ipu_rs_code, j.ipu_rescue_mem,
+--                               j.ipu_rescue_charge,J.ipu_cashback_appl, J.ipu_cashback_level
+--                              );
+--               EXCEPTION
+--                  WHEN OTHERS
+--                  THEN
+--                     raise_error ('UNABLE TO POPULATE RISK DETAILS, ..1.');
+--               END;
+
+--               FOR k IN sect_cur
+--               LOOP
+--                  BEGIN
+--                     INSERT INTO gin_policy_insured_limits
+--                                 (pil_code,
+--                                  pil_ipu_code,
+--                                  pil_sect_code, pil_sect_sht_desc,
+--                                  pil_desc, pil_row_num,
+--                                  pil_calc_group, pil_limit_amt,
+--                                  pil_prem_rate, pil_prem_amt,
+--                                  pil_rate_type, pil_rate_desc,
+--                                  pil_sect_type, pil_original_prem_rate,
+--                                  pil_multiplier_rate,
+--                                  pil_multiplier_div_factor,
+--                                  pil_annual_premium, pil_rate_div_fact,
+--                                  pil_free_limit, pil_free_limit_amt,
+--                                  --PIL_DESC,
+--                                  pil_compute, pil_prd_type,
+--                                  pil_dual_basis, pil_prem_accumulation,
+--                                  pil_declaration_section,
+--                                  pil_annual_actual_prem,
+--                                  pil_prorata_full
+--                                 )
+--                          VALUES (   TO_NUMBER (TO_CHAR (SYSDATE, 'RRRR'))
+--                                  || gin_pil_code_seq.NEXTVAL,
+--                                  TO_NUMBER (v_new_ipu_code),
+--                                  k.pil_sect_code, k.pil_sect_sht_desc,
+--                                  k.pil_desc, k.pil_row_num,
+--                                  k.pil_calc_group, k.pil_limit_amt,
+--                                  k.pil_prem_rate, k.pil_prem_amt,
+--                                  k.pil_rate_type, k.pil_rate_desc,
+--                                  k.pil_sect_type, k.pil_original_prem_rate,
+--                                  k.pil_multiplier_rate,
+--                                  k.pil_multiplier_div_factor,
+--                                  k.pil_annual_premium, k.pil_rate_div_fact,
+--                                  k.pil_free_limit, k.pil_free_limit_amt,
+--                                  --PIL_DESC,
+--                                  k.pil_compute, k.pil_prd_type,
+--                                  k.pil_dual_basis, k.pil_prem_accumulation,
+--                                  k.pil_declaration_section,
+--                                  k.pil_annual_actual_prem,
+--                                  k.pil_prorata_full
+--                                 );
+--                  EXCEPTION
+--                     WHEN OTHERS
+--                     THEN
+--                        raise_error ('ERROR UPDATING RISK SECTIONS..');
+--                  END;
+
+--                  BEGIN
+--                     INSERT INTO gin_ren_policy_insured_limits
+--                                 (pil_code,
+--                                  pil_ipu_code,
+--                                  pil_sect_code, pil_sect_sht_desc,
+--                                  pil_desc, pil_row_num,
+--                                  pil_calc_group, pil_limit_amt,
+--                                  pil_prem_rate, pil_prem_amt,
+--                                  pil_rate_type, pil_rate_desc,
+--                                  pil_sect_type, pil_original_prem_rate,
+--                                  pil_multiplier_rate,
+--                                  pil_multiplier_div_factor,
+--                                  pil_annual_premium, pil_rate_div_fact,
+--                                  pil_free_limit, pil_free_limit_amt,
+--                                  --PIL_DESC,
+--                                  pil_compute, pil_prd_type,
+--                                  pil_dual_basis, pil_prem_accumulation,
+--                                  pil_declaration_section,
+--                                  pil_prorata_full
+--                                 )
+--                          VALUES (gin_pil_code_seq.NEXTVAL,
+--                                  TO_NUMBER (v_new_ipu_code),
+--                                  k.pil_sect_code, k.pil_sect_sht_desc,
+--                                  k.pil_desc, k.pil_row_num,
+--                                  k.pil_calc_group, k.pil_limit_amt,
+--                                  k.pil_prem_rate, k.pil_prem_amt,
+--                                  k.pil_rate_type, k.pil_rate_desc,
+--                                  k.pil_sect_type, k.pil_original_prem_rate,
+--                                  k.pil_multiplier_rate,
+--                                  k.pil_multiplier_div_factor,
+--                                  k.pil_annual_premium, k.pil_rate_div_fact,
+--                                  k.pil_free_limit, k.pil_free_limit_amt,
+--                                  --PIL_DESC,
+--                                  k.pil_compute, k.pil_prd_type,
+--                                  k.pil_dual_basis, k.pil_prem_accumulation,
+--                                  k.pil_declaration_section,
+--                                  k.pil_prorata_full
+--                                 );
+--                  EXCEPTION
+--                     WHEN OTHERS
+--                     THEN
+--                        raise_error ('ERROR UPDATING RISK SECTIONS..');
+--                  END;
+--               END LOOP;
+
+--               FOR k IN non_exp_sect
+--               LOOP
+--                  BEGIN
+--                     INSERT INTO gin_policy_insured_limits
+--                                 (pil_code,
+--                                  pil_ipu_code,
+--                                  pil_sect_code, pil_sect_sht_desc,
+--                                  pil_desc, pil_row_num,
+--                                  pil_calc_group, pil_limit_amt,
+--                                  pil_prem_rate, pil_prem_amt,
+--                                  pil_rate_type, pil_rate_desc,
+--                                  pil_sect_type, pil_original_prem_rate,
+--                                  pil_multiplier_rate,
+--                                  pil_multiplier_div_factor,
+--                                  pil_annual_premium, pil_rate_div_fact,
+--                                  pil_free_limit, pil_free_limit_amt,
+--                                  --PIL_DESC,
+--                                  pil_compute, pil_prd_type,
+--                                  pil_dual_basis, pil_prem_accumulation,
+--                                  pil_declaration_section,
+--                                  pil_annual_actual_prem,
+--                                  pil_prorata_full
+--                                 )
+--                          VALUES (   TO_NUMBER (TO_CHAR (SYSDATE, 'RRRR'))
+--                                  || gin_pil_code_seq.NEXTVAL,
+--                                  TO_NUMBER (v_new_ipu_code),
+--                                  k.pil_sect_code, k.pil_sect_sht_desc,
+--                                  k.pil_desc, k.pil_row_num,
+--                                  k.pil_calc_group, k.pil_limit_amt,
+--                                  k.pil_prem_rate, k.pil_prem_amt,
+--                                  k.pil_rate_type, k.pil_rate_desc,
+--                                  k.pil_sect_type, k.pil_original_prem_rate,
+--                                  k.pil_multiplier_rate,
+--                                  k.pil_multiplier_div_factor,
+--                                  k.pil_annual_premium, k.pil_rate_div_fact,
+--                                  k.pil_free_limit, k.pil_free_limit_amt,
+--                                  --PIL_DESC,
+--                                  k.pil_compute, k.pil_prd_type,
+--                                  k.pil_dual_basis, k.pil_prem_accumulation,
+--                                  k.pil_declaration_section,
+--                                  k.pil_annual_actual_prem,
+--                                  k.pil_prorata_full
+--                                 );
+--                  EXCEPTION
+--                     WHEN OTHERS
+--                     THEN
+--                        raise_error ('ERROR UPDATING RISK SECTIONS..');
+--                  END;
+
+--                  BEGIN
+--                     INSERT INTO gin_ren_policy_insured_limits
+--                                 (pil_code,
+--                                  pil_ipu_code,
+--                                  pil_sect_code, pil_sect_sht_desc,
+--                                  pil_desc, pil_row_num,
+--                                  pil_calc_group, pil_limit_amt,
+--                                  pil_prem_rate, pil_prem_amt,
+--                                  pil_rate_type, pil_rate_desc,
+--                                  pil_sect_type, pil_original_prem_rate,
+--                                  pil_multiplier_rate,
+--                                  pil_multiplier_div_factor,
+--                                  pil_annual_premium, pil_rate_div_fact,
+--                                  pil_free_limit, pil_free_limit_amt,
+--                                  --PIL_DESC,
+--                                  pil_compute, pil_prd_type,
+--                                  pil_dual_basis, pil_prem_accumulation,
+--                                  pil_declaration_section,
+--                                  pil_prorata_full
+--                                 )
+--                          VALUES (gin_pil_code_seq.NEXTVAL,
+--                                  TO_NUMBER (v_new_ipu_code),
+--                                  k.pil_sect_code, k.pil_sect_sht_desc,
+--                                  k.pil_desc, k.pil_row_num,
+--                                  k.pil_calc_group, k.pil_limit_amt,
+--                                  k.pil_prem_rate, k.pil_prem_amt,
+--                                  k.pil_rate_type, k.pil_rate_desc,
+--                                  k.pil_sect_type, k.pil_original_prem_rate,
+--                                  k.pil_multiplier_rate,
+--                                  k.pil_multiplier_div_factor,
+--                                  k.pil_annual_premium, k.pil_rate_div_fact,
+--                                  k.pil_free_limit, k.pil_free_limit_amt,
+--                                  --PIL_DESC,
+--                                  k.pil_compute, k.pil_prd_type,
+--                                  k.pil_dual_basis, k.pil_prem_accumulation,
+--                                  k.pil_declaration_section,
+--                                  k.pil_prorata_full
+--                                 );
+--                  EXCEPTION
+--                     WHEN OTHERS
+--                     THEN
+--                        raise_error ('ERROR UPDATING RISK SECTIONS..');
+--                  END;
+--               END LOOP;
+--            END LOOP;
+
+--            BEGIN
+--               pop_taxes (i.pol_policy_no,
+--                          v_end_no,
+--                          v_batchno,
+--                          i.pol_pro_code,
+--                          i.pol_binder_policy,
+--                          'RE'
+--                         );
+--            EXCEPTION
+--               WHEN OTHERS
+--               THEN
+--                  raise_error ('ERROR POPULATING TAXES..');
+--            END;
+
+--            BEGIN
+--               pop_clauses (i.pol_policy_no,
+--                            v_end_no,
+--                            v_batchno,
+--                            i.pol_pro_code
+--                           );
+--            EXCEPTION
+--               WHEN OTHERS
+--               THEN
+--                  raise_error ('Error populating mandatory clauses..');
+--            END;
+--         /*
+--         BEGIN
+--            pop_liab_limits (i.pol_policy_no,
+--                         v_end_no,
+--                         v_batchno,
+--                         i.pol_pro_code
+--                        );
+--         EXCEPTION
+--            WHEN OTHERS
+--            THEN
+--               raise_error ('Error populating mandatory clauses..');
+--         END;
+--         */
+--         END LOOP;
+--      -- COMMIT;
+--      END IF;
+--   END;
+
+--

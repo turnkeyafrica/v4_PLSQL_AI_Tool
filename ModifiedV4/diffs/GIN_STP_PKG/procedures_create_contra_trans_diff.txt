@@ -1,0 +1,2052 @@
+--- GIN_STP_PKG_HERITAGE_procedures_create_contra_trans.sql
++++ GIN_STP_PKG_NEW_GEMINIA_procedures_create_contra_trans.sql
+@@ -3,18 +3,16 @@
+                                    v_user        IN     VARCHAR2,
+                                    v_eff_date    IN     DATE)
+     IS
+-        v_serial            NUMBER (10);
+-        v_pol_no            VARCHAR2 (26);
+-        v_ends_no           VARCHAR2 (26);
++        v_serial         NUMBER (10);
++        v_pol_no         VARCHAR2 (26);
++        v_ends_no        VARCHAR2 (26);
+         --next_ggt_trans_no number;
+-        v_pol_prefix        VARCHAR2 (15);
+-        v_new_ipu_code      NUMBER;
+-        vdummy              NUMBER;
+-        v_tran_no           NUMBER;
+-        v_prrd_code         NUMBER;
+-        v_pdl_code          NUMBER;
+-        v_part_prxrd_code   NUMBER;
+-        v_count_contra      NUMBER;
++        v_pol_prefix     VARCHAR2 (15);
++        v_new_ipu_code   NUMBER;
++        vdummy           NUMBER;
++        v_tran_no        NUMBER;
++        v_prrd_code      NUMBER;
++        v_pdl_code       NUMBER;
+ 
+         CURSOR cur_pol IS
+             SELECT *
+@@ -64,12 +62,6 @@
+             SELECT *
+               FROM gin_policy_insured_limits
+              WHERE pil_ipu_code = v_ipu;
+-
+-        CURSOR cur_riskcommissions (v_ipu NUMBER)
+-        IS
+-            SELECT *
+-              FROM gin_policy_risk_commissions
+-             WHERE prc_ipu_code = v_ipu;
+ 
+         CURSOR cur_clauses (v_ipu NUMBER)
+         IS
+@@ -143,19 +135,12 @@
+               FROM gin_policy_sbu_dtls
+              WHERE pdl_pol_batch_no = v_old_batch;
+ 
+-        CURSOR cur_xol (v_prrd NUMBER)
++        CURSOR cur_riskcommissions (v_ipu NUMBER)
+         IS
+             SELECT *
+-              FROM GIN_POL_REIN_XOL_RISK_DETAILS
+-             WHERE PRXRD_prrd_code = v_prrd;
+-
+-        CURSOR curxol_participants (v_ptotr NUMBER)
+-        IS
+-            SELECT *
+-              FROM gin_xol_participations
+-             WHERE XPART_PRXRD_CODE = v_ptotr;
++              FROM gin_policy_risk_commissions
++             WHERE prc_ipu_code = v_ipu;
+     BEGIN
+-
+         IF v_old_batch IS NULL
+         THEN
+             raise_error ('Select old transaction!!...');
+@@ -299,26 +284,6 @@
+             IF NVL (vdummy, 0) > 0
+             THEN
+                 v_ends_no := v_ends_no || '-' || vdummy;
+-            END IF;
+-            
+-            IF cur_pol_rec.pol_policy_debit = 'Y'
+-            THEN
+-                BEGIN
+-                    SELECT COUNT(1)
+-                        INTO v_count_contra
+-                    FROM gin_policies 
+-                        WHERE pol_policy_no=cur_pol_rec.pol_policy_no
+-                            AND POL_PREV_BATCH_NO=v_old_batch
+-                            AND POL_POLICY_STATUS ='CO';
+-                EXCEPTION
+-                WHEN OTHERS
+-                THEN
+-                    v_count_contra :=0;
+-                END;
+-            END IF;
+-            IF NVL (v_count_contra, 0) > 0
+-            THEN
+-                RAISE_ERROR('ERROR : System trying to duplicate Contra transaction on the same policy. ');
+             END IF;
+ 
+             SELECT    TO_NUMBER (TO_CHAR (SYSDATE, 'RRRR'))
+@@ -448,7 +413,9 @@
+                                           pol_debiting_type,
+                                           pol_lta_comm_amt,
+                                           pol_lta_wtht,
+-                                          pol_lta_comm_endos_amt,pol_exch_rate_fixed)
++                                          pol_other_client_deductibles,
++                                          pol_coin_other_client_charges,
++                                          pol_div_code)
+                      VALUES (cur_pol_rec.pol_policy_no,
+                              v_ends_no,
+                              v_batch_no,
+@@ -573,8 +540,9 @@
+                              cur_pol_rec.pol_debiting_type,
+                              -cur_pol_rec.pol_lta_comm_amt,
+                              -cur_pol_rec.pol_lta_wtht,
+-                             -cur_pol_rec.pol_lta_comm_endos_amt,
+-							 cur_pol_rec.pol_exch_rate_fixed);
++                             -cur_pol_rec.pol_other_client_deductibles,
++                             -cur_pol_rec.pol_coin_other_client_charges,
++                             cur_pol_rec.pol_div_code);
+             EXCEPTION
+                 WHEN OTHERS
+                 THEN
+@@ -591,18 +559,22 @@
+             LOOP
+                 --INSERTING INTO GIN_POLICY_TAXES
+                 BEGIN
+-                    INSERT INTO gin_policy_taxes (ptx_trac_trnt_code,
+-                                                  ptx_pol_policy_no,
+-                                                  ptx_pol_ren_endos_no,
+-                                                  ptx_pol_batch_no,
+-                                                  ptx_rate,
+-                                                  ptx_amount,
+-                                                  ptx_tl_lvl_code,
+-                                                  ptx_rate_type,
+-                                                  ptx_rate_desc,
+-                                                  ptx_endos_diff_amt,
+-                                                  ptx_tax_type,
+-                                                  ptx_trac_scl_code)
++                    INSERT INTO gin_policy_taxes (
++                                    ptx_trac_trnt_code,
++                                    ptx_pol_policy_no,
++                                    ptx_pol_ren_endos_no,
++                                    ptx_pol_batch_no,
++                                    ptx_rate,
++                                    ptx_amount,
++                                    ptx_tl_lvl_code,
++                                    ptx_rate_type,
++                                    ptx_rate_desc,
++                                    ptx_endos_diff_amt,
++                                    ptx_tax_type,
++                                    ptx_trac_scl_code,
++                                    ptx_coin_other_client_chrgs,
++                                    ptx_override,
++                                    ptx_override_amt)
+                          VALUES (cur_tax_rec.ptx_trac_trnt_code,
+                                  cur_tax_rec.ptx_pol_policy_no,
+                                  v_ends_no,
+@@ -614,7 +586,10 @@
+                                  cur_tax_rec.ptx_rate_desc,
+                                  -cur_tax_rec.ptx_endos_diff_amt,
+                                  cur_tax_rec.ptx_tax_type,
+-                                 cur_tax_rec.ptx_trac_scl_code);
++                                 cur_tax_rec.ptx_trac_scl_code,
++                                 -cur_tax_rec.ptx_coin_other_client_chrgs,
++                                 cur_tax_rec.ptx_override,
++                                 -cur_tax_rec.ptx_override_amt);
+                 EXCEPTION
+                     WHEN OTHERS
+                     THEN
+@@ -727,30 +702,31 @@
+                                                    fid_reins_term_to,
+                                                    fid_cede_sign_dt)
+                              VALUES (
+-                                 cur_facre_dtls_rec.fid_pol_policy_no,
+-                                 v_ends_no,
+-                                 v_batch_no,
+-                                 cur_facre_dtls_rec.fid_agnt_agent_code,
+-                                 cur_facre_dtls_rec.fid_agnt_sht_desc,
+-                                 cur_facre_dtls_rec.fid_prp_code,
+-                                 cur_facre_dtls_rec.fid_sum_insured,
+-                                 cur_facre_dtls_rec.fid_gross_rate,
+-                                 cur_facre_dtls_rec.fid_cede_comp_first_prem,
+-                                 cur_facre_dtls_rec.fid_cede_comp_terms,
+-                                 cur_facre_dtls_rec.fid_rein_terms,
+-                                 cur_facre_dtls_rec.fid_cede_comp_gross_ret,
+-                                 cur_facre_dtls_rec.fid_cede_comp_rein_amt,
+-                                 cur_facre_dtls_rec.fid_amt_perc_sum_insured,
+-                                 cur_facre_dtls_rec.fid_wef,
+-                                 cur_facre_dtls_rec.fid_wet,
+-                                    TO_NUMBER (TO_CHAR (SYSDATE, 'RRRR'))
+-                                 || gin_fid_code_seq.NEXTVAL,
+-                                 cur_facre_dtls_rec.fid_cede_comp_policy_no,
+-                                 cur_facre_dtls_rec.fid_cede_comp_term_frm,
+-                                 cur_facre_dtls_rec.fid_cede_comp_term_to,
+-                                 cur_facre_dtls_rec.fid_cede_company_ren_prem,
+-                                 cur_facre_dtls_rec.fid_reins_term_to,
+-                                 cur_facre_dtls_rec.fid_cede_sign_dt);
++                                        cur_facre_dtls_rec.fid_pol_policy_no,
++                                        v_ends_no,
++                                        v_batch_no,
++                                        cur_facre_dtls_rec.fid_agnt_agent_code,
++                                        cur_facre_dtls_rec.fid_agnt_sht_desc,
++                                        cur_facre_dtls_rec.fid_prp_code,
++                                        cur_facre_dtls_rec.fid_sum_insured,
++                                        cur_facre_dtls_rec.fid_gross_rate,
++                                        cur_facre_dtls_rec.fid_cede_comp_first_prem,
++                                        cur_facre_dtls_rec.fid_cede_comp_terms,
++                                        cur_facre_dtls_rec.fid_rein_terms,
++                                        cur_facre_dtls_rec.fid_cede_comp_gross_ret,
++                                        cur_facre_dtls_rec.fid_cede_comp_rein_amt,
++                                        cur_facre_dtls_rec.fid_amt_perc_sum_insured,
++                                        cur_facre_dtls_rec.fid_wef,
++                                        cur_facre_dtls_rec.fid_wet,
++                                           TO_NUMBER (
++                                               TO_CHAR (SYSDATE, 'RRRR'))
++                                        || gin_fid_code_seq.NEXTVAL,
++                                        cur_facre_dtls_rec.fid_cede_comp_policy_no,
++                                        cur_facre_dtls_rec.fid_cede_comp_term_frm,
++                                        cur_facre_dtls_rec.fid_cede_comp_term_to,
++                                        cur_facre_dtls_rec.fid_cede_company_ren_prem,
++                                        cur_facre_dtls_rec.fid_reins_term_to,
++                                        cur_facre_dtls_rec.fid_cede_sign_dt);
+                 END LOOP;                                 --cur_facre_dtls_rec
+             EXCEPTION
+                 WHEN OTHERS
+@@ -763,54 +739,60 @@
+             LOOP
+                 --INSERT INTO GIN_COINSURERS
+                 BEGIN
+-                    INSERT INTO gin_coinsurers (coin_agnt_agent_code,
+-                                                coin_agnt_sht_desc,
+-                                                coin_gl_code,
+-                                                coin_lead,
+-                                                coin_perct,
+-                                                coin_prem,
+-                                                coin_pol_policy_no,
+-                                                coin_pol_ren_endos_no,
+-                                                coin_pol_batch_no,
+-                                                coin_fee_rate,
+-                                                coin_fee_amt,
+-                                                coin_duties,
+-                                                coin_si,
+-                                                coin_commission,
+-                                                coin_whtx,
+-                                                coin_prem_tax,
+-                                                coin_annual_prem,
+-                                                coin_fee_type,
+-                                                coin_aga_code,
+-                                                coin_aga_sht_desc,
+-                                                coin_com_disc_amt,
+-                                                coin_vat_amt,
+-                                                coin_optional_comm,
+-                                                coin_comm_rate)
+-                         VALUES (cur_coinsurer_rec.coin_agnt_agent_code,
+-                                 cur_coinsurer_rec.coin_agnt_sht_desc,
+-                                 cur_coinsurer_rec.coin_gl_code,
+-                                 cur_coinsurer_rec.coin_lead,
+-                                 cur_coinsurer_rec.coin_perct,
+-                                 -NVL (cur_coinsurer_rec.coin_prem, 0),
+-                                 cur_coinsurer_rec.coin_pol_policy_no,
+-                                 v_ends_no,
+-                                 v_batch_no,
+-                                 cur_coinsurer_rec.coin_fee_rate,
+-                                 -cur_coinsurer_rec.coin_fee_amt,
+-                                 -cur_coinsurer_rec.coin_duties,
+-                                 -cur_coinsurer_rec.coin_si,
+-                                 -cur_coinsurer_rec.coin_commission,
+-                                 -cur_coinsurer_rec.coin_whtx,
+-                                 -cur_coinsurer_rec.coin_prem_tax,
+-                                 -cur_coinsurer_rec.coin_annual_prem,
+-                                 cur_coinsurer_rec.coin_fee_type,
+-                                 cur_coinsurer_rec.coin_aga_code,
+-                                 cur_coinsurer_rec.coin_aga_sht_desc,
+-                                 -cur_coinsurer_rec.coin_com_disc_amt,
+-                                 -cur_coinsurer_rec.coin_vat_amt,
+-                                 cur_coinsurer_rec.coin_optional_comm,
+-                                 -cur_coinsurer_rec.coin_comm_rate);
++                    INSERT INTO gin_coinsurers (
++                                    coin_agnt_agent_code,
++                                    coin_agnt_sht_desc,
++                                    coin_gl_code,
++                                    coin_lead,
++                                    coin_perct,
++                                    coin_prem,
++                                    coin_pol_policy_no,
++                                    coin_pol_ren_endos_no,
++                                    coin_pol_batch_no,
++                                    coin_fee_rate,
++                                    coin_fee_amt,
++                                    coin_duties,
++                                    coin_si,
++                                    coin_commission,
++                                    coin_whtx,
++                                    coin_prem_tax,
++                                    coin_annual_prem,
++                                    coin_fee_type,
++                                    coin_aga_code,
++                                    coin_aga_sht_desc,
++                                    coin_com_disc_amt,
++                                    coin_vat_amt,
++                                    coin_optional_comm,
++                                    coin_comm_rate,
++                                    coin_other_client_deductibles,
++                                    coin_premium_tax)
++                             VALUES (
++                                        cur_coinsurer_rec.coin_agnt_agent_code,
++                                        cur_coinsurer_rec.coin_agnt_sht_desc,
++                                        cur_coinsurer_rec.coin_gl_code,
++                                        cur_coinsurer_rec.coin_lead,
++                                        cur_coinsurer_rec.coin_perct,
++                                        -NVL (cur_coinsurer_rec.coin_prem, 0),
++                                        cur_coinsurer_rec.coin_pol_policy_no,
++                                        v_ends_no,
++                                        v_batch_no,
++                                        cur_coinsurer_rec.coin_fee_rate,
++                                        -cur_coinsurer_rec.coin_fee_amt,
++                                        -cur_coinsurer_rec.coin_duties,
++                                        -cur_coinsurer_rec.coin_si,
++                                        -cur_coinsurer_rec.coin_commission,
++                                        -cur_coinsurer_rec.coin_whtx,
++                                        -cur_coinsurer_rec.coin_prem_tax,
++                                        -cur_coinsurer_rec.coin_annual_prem,
++                                        cur_coinsurer_rec.coin_fee_type,
++                                        cur_coinsurer_rec.coin_aga_code,
++                                        cur_coinsurer_rec.coin_aga_sht_desc,
++                                        -cur_coinsurer_rec.coin_com_disc_amt,
++                                        -cur_coinsurer_rec.coin_vat_amt,
++                                        cur_coinsurer_rec.coin_optional_comm,
++                                        -cur_coinsurer_rec.coin_comm_rate,
++                                        -cur_coinsurer_rec.coin_other_client_deductibles,
++                                        -cur_coinsurer_rec.coin_premium_tax);
+                 EXCEPTION
+                     WHEN OTHERS
+                     THEN
+@@ -910,54 +892,54 @@
+                                                prm_prev_unalloc,
+                                                prm_tracking_no)
+                          VALUES (
+-                                TO_NUMBER (TO_CHAR (SYSDATE, 'YYYY'))
+-                             || gin_prm_code_seq.NEXTVAL,
+-                             cur_rctp_rec.prm_trans_no,
+-                             SYSDATE,
+-                             cur_rctp_rec.prm_cheque_no,
+-                             -cur_rctp_rec.prm_amt,
+-                             v_batch_no,
+-                             cur_rctp_rec.prm_pol_policy_no,
+-                             cur_rctp_rec.prm_receipt_no,
+-                             cur_rctp_rec.prm_receipt_date,
+-                             -cur_rctp_rec.prm_allocated_amt,
+-                             NULL,
+-                             cur_rctp_rec.prm_pay_method,
+-                             NULL,
+-                             cur_rctp_rec.prm_remarks,
+-                             NULL,
+-                             NULL,
+-                             -cur_rctp_rec.prm_prem_comm,
+-                             -cur_rctp_rec.prm_pens_comm,
+-                             -cur_rctp_rec.prm_chk_comm,
+-                             -cur_rctp_rec.prm_prem_tax,
+-                             'D',
+-                             cur_rctp_rec.prm_status,
+-                             cur_rctp_rec.prm_done_by,
+-                             cur_rctp_rec.prm_fully_refunded,
+-                             cur_rctp_rec.prm_source,
+-                             cur_rctp_rec.prm_receipt_trans_code,
+-                             cur_rctp_rec.prm_production_date,
+-                             cur_rctp_rec.prm_chk_comm_rate,
+-                             -cur_rctp_rec.prm_reinst_int_amt,
+-                             cur_rctp_rec.prm_fund_posted,
+-                             -cur_rctp_rec.prm_additional_prem,
+-                             cur_rctp_rec.prm_pof_code,
+-                             cur_rctp_rec.prm_other_taxes,
+-                             -cur_rctp_rec.prm_rcpt_rfnd_amt,
+-                             cur_rctp_rec.prm_rfnd_prodctn_date,
+-                             cur_rctp_rec.prm_within_system,
+-                             cur_rctp_rec.prm_fund_posted_by,
+-                             cur_rctp_rec.prm_fund_post_date,
+-                             cur_rctp_rec.prm_origin,
+-                             cur_rctp_rec.prm_alloc_to,
+-                             cur_rctp_rec.prm_prem_tax_posted,
+-                             cur_rctp_rec.prm_prem_tax_posted_by,
+-                             cur_rctp_rec.prm_prem_tax_posted_date,
+-                             cur_rctp_rec.prm_policy_fee,
+-                             cur_rctp_rec.prm_chk_agen_code,
+-                             cur_rctp_rec.prm_prev_unalloc,
+-                             cur_rctp_rec.prm_tracking_no);
++                                       TO_NUMBER (TO_CHAR (SYSDATE, 'YYYY'))
++                                    || gin_prm_code_seq.NEXTVAL,
++                                    cur_rctp_rec.prm_trans_no,
++                                    SYSDATE,
++                                    cur_rctp_rec.prm_cheque_no,
++                                    -cur_rctp_rec.prm_amt,
++                                    v_batch_no,
++                                    cur_rctp_rec.prm_pol_policy_no,
++                                    cur_rctp_rec.prm_receipt_no,
++                                    cur_rctp_rec.prm_receipt_date,
++                                    -cur_rctp_rec.prm_allocated_amt,
++                                    NULL,
++                                    cur_rctp_rec.prm_pay_method,
++                                    NULL,
++                                    cur_rctp_rec.prm_remarks,
++                                    NULL,
++                                    NULL,
++                                    -cur_rctp_rec.prm_prem_comm,
++                                    -cur_rctp_rec.prm_pens_comm,
++                                    -cur_rctp_rec.prm_chk_comm,
++                                    -cur_rctp_rec.prm_prem_tax,
++                                    'D',
++                                    cur_rctp_rec.prm_status,
++                                    cur_rctp_rec.prm_done_by,
++                                    cur_rctp_rec.prm_fully_refunded,
++                                    cur_rctp_rec.prm_source,
++                                    cur_rctp_rec.prm_receipt_trans_code,
++                                    cur_rctp_rec.prm_production_date,
++                                    cur_rctp_rec.prm_chk_comm_rate,
++                                    -cur_rctp_rec.prm_reinst_int_amt,
++                                    cur_rctp_rec.prm_fund_posted,
++                                    -cur_rctp_rec.prm_additional_prem,
++                                    cur_rctp_rec.prm_pof_code,
++                                    cur_rctp_rec.prm_other_taxes,
++                                    -cur_rctp_rec.prm_rcpt_rfnd_amt,
++                                    cur_rctp_rec.prm_rfnd_prodctn_date,
++                                    cur_rctp_rec.prm_within_system,
++                                    cur_rctp_rec.prm_fund_posted_by,
++                                    cur_rctp_rec.prm_fund_post_date,
++                                    cur_rctp_rec.prm_origin,
++                                    cur_rctp_rec.prm_alloc_to,
++                                    cur_rctp_rec.prm_prem_tax_posted,
++                                    cur_rctp_rec.prm_prem_tax_posted_by,
++                                    cur_rctp_rec.prm_prem_tax_posted_date,
++                                    cur_rctp_rec.prm_policy_fee,
++                                    cur_rctp_rec.prm_chk_agen_code,
++                                    cur_rctp_rec.prm_prev_unalloc,
++                                    cur_rctp_rec.prm_tracking_no);
+             END LOOP;
+ 
+             --OPEN cur_insureds
+@@ -972,15 +954,15 @@
+                                                      polin_category,
+                                                      polin_prp_code)
+                              VALUES (
+-                                 TO_NUMBER (
+-                                        TO_CHAR (SYSDATE, 'RRRR')
+-                                     || polin_code_seq.NEXTVAL),
+-                                 NULL,
+-                                 cur_pol_rec.pol_policy_no,
+-                                 v_ends_no,
+-                                 v_batch_no,
+-                                 NULL,
+-                                 cur_insureds_rec.polin_prp_code);
++                                        TO_NUMBER (
++                                               TO_CHAR (SYSDATE, 'RRRR')
++                                            || polin_code_seq.NEXTVAL),
++                                        NULL,
++                                        cur_pol_rec.pol_policy_no,
++                                        v_ends_no,
++                                        v_batch_no,
++                                        NULL,
++                                        cur_insureds_rec.polin_prp_code);
+                 EXCEPTION
+                     WHEN OTHERS
+                     THEN
+@@ -999,9 +981,8 @@
+ 
+                     -- DO YOUR INSERTS INTO ipu
+                     BEGIN
+-                        --               RAISE_ERROR('YEAR'||cur_ipu_rec.ipu_model_yr||'MODEL'|| cur_ipu_rec.ipu_vehicle_model
+-                        --                              ||'MAKE' ||cur_ipu_rec.ipu_vehicle_make);
+-                        --raise_error('IPU_WTHT='||cur_ipu_rec.ipu_wtht);
++                        --  RAISE_ERROR('YEAR'||cur_ipu_rec.ipu_model_yr||'MODEL'|| cur_ipu_rec.ipu_vehicle_model
++                        --  ||'MAKE' ||cur_ipu_rec.ipu_vehicle_make);
+                         INSERT INTO gin_insured_property_unds (
+                                         ipu_code,
+                                         ipu_property_id,
+@@ -1133,6 +1114,7 @@
+                                         ipu_rescue_mem,
+                                         ipu_rescue_charge,
+                                         ipu_phfund,
++                                        ipu_wtht, ---- ADDED ON 03_11_2022 TO RESOLVE CONTRA TRANSACTIONS THAT DO NOT REVERSE THE WHTX AMOUNT
+                                         ipu_co_phfund,
+                                         ipu_health_tax,
+                                         ipu_road_safety_tax,
+@@ -1155,176 +1137,220 @@
+                                         ipu_lta_endos_com_amt,
+                                         ipu_lta_commission,
+                                         ipu_lta_comm_rate,
+-                                        ipu_wtht,
+-                                        ipu_joint, ipu_joint_prp_code)
++                                        ipu_maintenance_period_type,
++                                        ipu_maintenance_period,
++                                        ipu_other_client_deductibles,
++                                        ipu_coin_other_client_charges,
++                                        ipu_survey_agnt_code,
++                                        ipu_survey,
++                                        ipu_marine_type)
+                                  VALUES (
+-                                     v_new_ipu_code,
+-                                     cur_ipu_rec.ipu_property_id,
+-                                     cur_ipu_rec.ipu_item_desc,
+-                                     cur_ipu_rec.ipu_qty,
+-                                     -NVL (cur_ipu_rec.ipu_value, 0),
+-                                     cur_ipu_rec.ipu_wef,
+-                                     cur_ipu_rec.ipu_wet,
+-                                     cur_pol_rec.pol_policy_no,
+-                                     v_ends_no,
+-                                     v_batch_no,
+-                                     -NVL (cur_ipu_rec.ipu_basic_premium, 0),
+-                                     -NVL (cur_ipu_rec.ipu_nett_premium, 0),
+-                                     cur_ipu_rec.ipu_compulsory_excess,
+-                                     cur_ipu_rec.ipu_add_theft_excess,
+-                                     cur_ipu_rec.ipu_add_exp_excess,
+-                                     cur_ipu_rec.ipu_prr_rate,
+-                                     -NVL (cur_ipu_rec.ipu_comp_retention, 0),
+-                                     cur_ipu_rec.ipu_pol_est_max_loss,
+-                                     -NVL (cur_ipu_rec.ipu_avail_fulc_bal, 0),
+-                                     -NVL (cur_ipu_rec.ipu_endos_diff_amt, 0),
+-                                     cur_ipu_rec.ipu_prem_wef,
+-                                     cur_ipu_rec.ipu_earth_quake_cover,
+-                                     cur_ipu_rec.ipu_earth_quake_prem,
+-                                     cur_ipu_rec.ipu_location,
+-                                     -NVL (cur_ipu_rec.ipu_itl, 0),
+-                                     TO_NUMBER (
+-                                            TO_CHAR (SYSDATE, 'RRRR')
+-                                         || polin_code_seq.CURRVAL),
+-                                     cur_ipu_rec.ipu_sec_sect_code,
+-                                     cur_ipu_rec.ipu_sect_sht_desc,
+-                                     cur_ipu_rec.ipu_sec_scl_code,
+-                                     cur_ipu_rec.ipu_ncd_status,
+-                                     cur_ipu_rec.ipu_cert_issued,
+-                                     cur_ipu_rec.ipu_related_ipu_code,
+-                                     cur_ipu_rec.ipu_prorata,
+-                                     -NVL (cur_ipu_rec.ipu_bp, 0),
+-                                     -NVL (cur_ipu_rec.ipu_gp, 0),
+-                                     -NVL (cur_ipu_rec.ipu_fp, 0),
+-                                     -NVL (cur_ipu_rec.ipu_fap, 0),
+-                                     cur_ipu_rec.ipu_prev_ipu_code,
+-                                     cur_ipu_rec.ipu_cummulative_reins,
+-                                     cur_ipu_rec.ipu_eml_si,
+-                                     1,
+-                                     cur_ipu_rec.ipu_ct_code,
+-                                     cur_ipu_rec.ipu_sht_desc,
+-                                     cur_ipu_rec.ipu_quz_code,
+-                                     cur_ipu_rec.ipp_quz_sht_desc,
+-                                     cur_ipu_rec.ipu_quz_sht_desc,
+-                                     cur_ipu_rec.ipu_ncl_level,
+-                                     cur_ipu_rec.ipu_ncd_level,
+-                                     cur_ipu_rec.ipu_id,
+-                                     -NVL (
+-                                          cur_ipu_rec.ipu_gross_comp_retention,
+-                                          0),
+-                                     cur_ipu_rec.ipu_bind_code,
+-                                     -NVL (cur_ipu_rec.ipu_commission, 0),
+-                                     -NVL (
+-                                          cur_ipu_rec.ipu_comm_endos_diff_amt,
+-                                          0),
+-                                     -NVL (cur_ipu_rec.ipu_facre_amount, 0),
+-                                     cur_ipu_rec.ipu_clp_code,
+-                                     cur_ipu_rec.ipu_excess_rate,
+-                                     cur_ipu_rec.ipu_excess_type,
+-                                     cur_ipu_rec.ipu_excess_rate_type,
+-                                     cur_ipu_rec.ipu_excess_min,
+-                                     cur_ipu_rec.ipu_excess_max,
+-                                     cur_ipu_rec.ipu_prereq_ipu_code,
+-                                     cur_ipu_rec.ipu_escalation_rate,
+-                                     cur_ipu_rec.ipu_endos_remove,
+-                                     cur_ipu_rec.ipu_comm_rate,
+-                                     cur_ipu_rec.ipu_prev_batch_no,
+-                                     cur_ipu_rec.ipu_cur_code,
+-                                     cur_ipu_rec.ipu_relr_code,
+-                                     cur_ipu_rec.ipu_relr_sht_desc,
+-                                     -NVL (cur_ipu_rec.ipu_reinsure_amt, 0),
+-                                     cur_ipu_rec.ipu_prp_code,
+-                                     -NVL (cur_ipu_rec.ipu_max_exposure, 0),
+-                                     cur_ipu_rec.ipu_com_retention_rate,
+-                                     cur_ipu_rec.ipu_retro_cover,
+-                                     cur_ipu_rec.ipu_retro_wef,
+-                                     cur_ipu_rec.ipu_eff_wef,
+-                                     cur_ipu_rec.ipu_eff_wet,
+-                                     cur_ipu_rec.ipu_comments,
+-                                     cur_ipu_rec.ipu_covt_code,
+-                                     cur_ipu_rec.ipu_covt_sht_desc,
+-                                     -NVL (cur_ipu_rec.ipu_si_diff, 0),
+-                                     cur_ipu_rec.ipu_terr_code,
+-                                     cur_ipu_rec.ipu_terr_desc,
+-                                     cur_ipu_rec.ipu_from_time,
+-                                     cur_ipu_rec.ipu_to_time,
+-                                     -NVL (
+-                                          cur_ipu_rec.ipu_tot_endos_prem_dif,
+-                                          0),
+-                                     -NVL (cur_ipu_rec.ipu_tot_gp, 0),
+-                                     -NVL (cur_ipu_rec.ipu_tot_value, 0),
+-                                     cur_ipu_rec.ipu_cover_days,
+-                                     cur_ipu_rec.ipu_grp_si_risk_pct,
+-                                     -NVL (cur_ipu_rec.ipu_grp_top_loc, 0),
+-                                     -NVL (
+-                                          cur_ipu_rec.ipu_grp_comp_gross_ret,
+-                                          0),
+-                                     -NVL (cur_ipu_rec.ipu_grp_comp_net_ret,
+-                                           0),
+-                                     -NVL (cur_ipu_rec.ipu_prev_prem, 0),
+-                                     cur_ipu_rec.ipu_ri_agnt_com_rate,
+-                                     cur_ipu_rec.ipu_uw_yr,
+-                                     cur_ipu_rec.ipu_status,
+-                                     -NVL (cur_ipu_rec.ipu_paid_tl, 0),
+-                                     -NVL (cur_ipu_rec.ipu_paid_premium, 0),
+-                                     NVL (cur_ipu_rec.ipu_trans_count, 0) + 1,
+-                                     cur_ipu_rec.ipu_rate_change_comment,
+-                                     -NVL (cur_ipu_rec.ipu_prem_tax, 0),
+-                                     cur_ipu_rec.ipu_trans_eff_wet,
+-                                     cur_ipu_rec.ipu_compute_max_exposure,
+-                                     cur_ipu_rec.ipu_endose_fap_or_bc,
+-                                     -NVL (cur_ipu_rec.ipu_tot_first_loss, 0),
+-                                     -NVL (
+-                                          cur_ipu_rec.ipu_accumulation_limit,
+-                                          0),
+-                                     cur_ipu_rec.ipu_inception_uwyr,
+-                                     cur_ipu_rec.ipu_eml_based_on,
+-                                     cur_ipu_rec.ipu_aggregate_limits,
+-                                     cur_ipu_rec.ipu_rc_sht_desc,
+-                                     cur_ipu_rec.ipu_rc_code,
+-                                     cur_ipu_rec.ipu_survey_date,
+-                                     cur_ipu_rec.ipu_item_details,
+-                                     cur_ipu_rec.ipu_code,
+-                                     -NVL (cur_ipu_rec.ipu_prev_tot_fap, 0),
+-                                     -NVL (cur_ipu_rec.ipu_prev_fap, 0),
+-                                     cur_ipu_rec.ipu_override_ri_retention,
+-                                     -cur_ipu_rec.ipu_ri_agnt_comm_amt,
+-                                     -cur_ipu_rec.ipu_earthqke_prem_diff,
+-                                     cur_ipu_rec.ipu_tot_fap,
+-                                     -cur_ipu_rec.ipu_coin_tl,
+-                                     -cur_ipu_rec.ipu_mktr_com_amt,
+-                                     cur_ipu_rec.ipu_mktr_com_rate,
+-                                     cur_ipu_rec.ipu_vat_rate,
+-                                     -cur_ipu_rec.ipu_vat_amt,
+-                                     cur_ipu_rec.ipu_status,
+-                                     cur_ipu_rec.ipu_rs_code,
+-                                     cur_ipu_rec.ipu_rescue_mem,
+-                                     -cur_ipu_rec.ipu_rescue_charge,
+-                                     -cur_ipu_rec.ipu_phfund,
+-                                     -cur_ipu_rec.ipu_co_phfund,
+-                                     -cur_ipu_rec.ipu_health_tax,
+-                                     -cur_ipu_rec.ipu_road_safety_tax,
+-                                     -cur_ipu_rec.ipu_certchg,
+-                                     -cur_ipu_rec.ipu_motor_levy,
+-                                     -cur_ipu_rec.ipu_client_vat_amt,
+-                                     cur_ipu_rec.ipu_cashback_appl,
+-                                     cur_ipu_rec.ipu_cashback_level,
+-                                     cur_ipu_rec.ipu_vehicle_model,
+-                                     cur_ipu_rec.ipu_vehicle_make,
+-                                     cur_ipu_rec.ipu_vehicle_model_code,
+-                                     cur_ipu_rec.ipu_vehicle_make_code,
+-                                     cur_ipu_rec.ipu_loc_town,
+-                                     cur_ipu_rec.ipu_prop_address,
+-                                     cur_ipu_rec.ipu_risk_note,
+-                                     cur_ipu_rec.ipu_other_com_charges,
+-                                     cur_ipu_rec.ipu_model_yr,
+-                                     cur_ipu_rec.ipu_insured_driver,
+-                                     cur_ipu_rec.ipu_cert_no,
+-                                     -cur_ipu_rec.ipu_lta_endos_com_amt,
+-                                     -cur_ipu_rec.ipu_lta_commission,
+-                                     cur_ipu_rec.ipu_lta_comm_rate,
+-                                     cur_ipu_rec.ipu_wtht,
+-                                     cur_ipu_rec.ipu_joint, cur_ipu_rec.ipu_joint_prp_code);
++                                            v_new_ipu_code,
++                                            cur_ipu_rec.ipu_property_id,
++                                            cur_ipu_rec.ipu_item_desc,
++                                            cur_ipu_rec.ipu_qty,
++                                            -NVL (cur_ipu_rec.ipu_value, 0),
++                                            cur_ipu_rec.ipu_wef,
++                                            cur_ipu_rec.ipu_wet,
++                                            cur_pol_rec.pol_policy_no,
++                                            v_ends_no,
++                                            v_batch_no,
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_basic_premium,
++                                                 0),
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_nett_premium,
++                                                 0),
++                                            cur_ipu_rec.ipu_compulsory_excess,
++                                            cur_ipu_rec.ipu_add_theft_excess,
++                                            cur_ipu_rec.ipu_add_exp_excess,
++                                            cur_ipu_rec.ipu_prr_rate,
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_comp_retention,
++                                                 0),
++                                            cur_ipu_rec.ipu_pol_est_max_loss,
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_avail_fulc_bal,
++                                                 0),
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_endos_diff_amt,
++                                                 0),
++                                            cur_ipu_rec.ipu_prem_wef,
++                                            cur_ipu_rec.ipu_earth_quake_cover,
++                                            cur_ipu_rec.ipu_earth_quake_prem,
++                                            cur_ipu_rec.ipu_location,
++                                            -NVL (cur_ipu_rec.ipu_itl, 0),
++                                            TO_NUMBER (
++                                                   TO_CHAR (SYSDATE, 'RRRR')
++                                                || polin_code_seq.CURRVAL),
++                                            cur_ipu_rec.ipu_sec_sect_code,
++                                            cur_ipu_rec.ipu_sect_sht_desc,
++                                            cur_ipu_rec.ipu_sec_scl_code,
++                                            cur_ipu_rec.ipu_ncd_status,
++                                            cur_ipu_rec.ipu_cert_issued,
++                                            cur_ipu_rec.ipu_related_ipu_code,
++                                            cur_ipu_rec.ipu_prorata,
++                                            -NVL (cur_ipu_rec.ipu_bp, 0),
++                                            -NVL (cur_ipu_rec.ipu_gp, 0),
++                                            -NVL (cur_ipu_rec.ipu_fp, 0),
++                                            -NVL (cur_ipu_rec.ipu_fap, 0),
++                                            cur_ipu_rec.ipu_prev_ipu_code,
++                                            cur_ipu_rec.ipu_cummulative_reins,
++                                            cur_ipu_rec.ipu_eml_si,
++                                            1,
++                                            cur_ipu_rec.ipu_ct_code,
++                                            cur_ipu_rec.ipu_sht_desc,
++                                            cur_ipu_rec.ipu_quz_code,
++                                            cur_ipu_rec.ipp_quz_sht_desc,
++                                            cur_ipu_rec.ipu_quz_sht_desc,
++                                            cur_ipu_rec.ipu_ncl_level,
++                                            cur_ipu_rec.ipu_ncd_level,
++                                            cur_ipu_rec.ipu_id,
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_gross_comp_retention,
++                                                 0),
++                                            cur_ipu_rec.ipu_bind_code,
++                                            -NVL (cur_ipu_rec.ipu_commission,
++                                                  0),
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_comm_endos_diff_amt,
++                                                 0),
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_facre_amount,
++                                                 0),
++                                            cur_ipu_rec.ipu_clp_code,
++                                            cur_ipu_rec.ipu_excess_rate,
++                                            cur_ipu_rec.ipu_excess_type,
++                                            cur_ipu_rec.ipu_excess_rate_type,
++                                            cur_ipu_rec.ipu_excess_min,
++                                            cur_ipu_rec.ipu_excess_max,
++                                            cur_ipu_rec.ipu_prereq_ipu_code,
++                                            cur_ipu_rec.ipu_escalation_rate,
++                                            cur_ipu_rec.ipu_endos_remove,
++                                            cur_ipu_rec.ipu_comm_rate,
++                                            cur_ipu_rec.ipu_prev_batch_no,
++                                            cur_ipu_rec.ipu_cur_code,
++                                            cur_ipu_rec.ipu_relr_code,
++                                            cur_ipu_rec.ipu_relr_sht_desc,
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_reinsure_amt,
++                                                 0),
++                                            cur_ipu_rec.ipu_prp_code,
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_max_exposure,
++                                                 0),
++                                            cur_ipu_rec.ipu_com_retention_rate,
++                                            cur_ipu_rec.ipu_retro_cover,
++                                            cur_ipu_rec.ipu_retro_wef,
++                                            cur_ipu_rec.ipu_eff_wef,
++                                            cur_ipu_rec.ipu_eff_wet,
++                                            cur_ipu_rec.ipu_comments,
++                                            cur_ipu_rec.ipu_covt_code,
++                                            cur_ipu_rec.ipu_covt_sht_desc,
++                                            -NVL (cur_ipu_rec.ipu_si_diff, 0),
++                                            cur_ipu_rec.ipu_terr_code,
++                                            cur_ipu_rec.ipu_terr_desc,
++                                            cur_ipu_rec.ipu_from_time,
++                                            cur_ipu_rec.ipu_to_time,
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_tot_endos_prem_dif,
++                                                 0),
++                                            -NVL (cur_ipu_rec.ipu_tot_gp, 0),
++                                            -NVL (cur_ipu_rec.ipu_tot_value,
++                                                  0),
++                                            cur_ipu_rec.ipu_cover_days,
++                                            cur_ipu_rec.ipu_grp_si_risk_pct,
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_grp_top_loc,
++                                                 0),
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_grp_comp_gross_ret,
++                                                 0),
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_grp_comp_net_ret,
++                                                 0),
++                                            -NVL (cur_ipu_rec.ipu_prev_prem,
++                                                  0),
++                                            cur_ipu_rec.ipu_ri_agnt_com_rate,
++                                            cur_ipu_rec.ipu_uw_yr,
++                                            cur_ipu_rec.ipu_status,
++                                            -NVL (cur_ipu_rec.ipu_paid_tl, 0),
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_paid_premium,
++                                                 0),
++                                              NVL (
++                                                  cur_ipu_rec.ipu_trans_count,
++                                                  0)
++                                            + 1,
++                                            cur_ipu_rec.ipu_rate_change_comment,
++                                            -NVL (cur_ipu_rec.ipu_prem_tax,
++                                                  0),
++                                            cur_ipu_rec.ipu_trans_eff_wet,
++                                            cur_ipu_rec.ipu_compute_max_exposure,
++                                            cur_ipu_rec.ipu_endose_fap_or_bc,
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_tot_first_loss,
++                                                 0),
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_accumulation_limit,
++                                                 0),
++                                            cur_ipu_rec.ipu_inception_uwyr,
++                                            cur_ipu_rec.ipu_eml_based_on,
++                                            cur_ipu_rec.ipu_aggregate_limits,
++                                            cur_ipu_rec.ipu_rc_sht_desc,
++                                            cur_ipu_rec.ipu_rc_code,
++                                            cur_ipu_rec.ipu_survey_date,
++                                            cur_ipu_rec.ipu_item_details,
++                                            cur_ipu_rec.ipu_code,
++                                            -NVL (
++                                                 cur_ipu_rec.ipu_prev_tot_fap,
++                                                 0),
++                                            -NVL (cur_ipu_rec.ipu_prev_fap,
++                                                  0),
++                                            cur_ipu_rec.ipu_override_ri_retention,
++                                            -cur_ipu_rec.ipu_ri_agnt_comm_amt,
++                                            -cur_ipu_rec.ipu_earthqke_prem_diff,
++                                            cur_ipu_rec.ipu_tot_fap,
++                                            -cur_ipu_rec.ipu_coin_tl,
++                                            -cur_ipu_rec.ipu_mktr_com_amt,
++                                            cur_ipu_rec.ipu_mktr_com_rate,
++                                            cur_ipu_rec.ipu_vat_rate,
++                                            -cur_ipu_rec.ipu_vat_amt,
++                                            cur_ipu_rec.ipu_status,
++                                            cur_ipu_rec.ipu_rs_code,
++                                            cur_ipu_rec.ipu_rescue_mem,
++                                            -cur_ipu_rec.ipu_rescue_charge,
++                                            -cur_ipu_rec.ipu_phfund,
++                                            cur_ipu_rec.IPU_WTHT, ---- ADDED ON 03_11_2022 TO RESOLVE CONTRA TRANSACTIONS THAT DO NOT REVERSE THE WHTX AMOUNT
++                                            -cur_ipu_rec.ipu_co_phfund,
++                                            -cur_ipu_rec.ipu_health_tax,
++                                            -cur_ipu_rec.ipu_road_safety_tax,
++                                            -cur_ipu_rec.ipu_certchg,
++                                            -cur_ipu_rec.ipu_motor_levy,
++                                            -cur_ipu_rec.ipu_client_vat_amt,
++                                            cur_ipu_rec.ipu_cashback_appl,
++                                            cur_ipu_rec.ipu_cashback_level,
++                                            cur_ipu_rec.ipu_vehicle_model,
++                                            cur_ipu_rec.ipu_vehicle_make,
++                                            cur_ipu_rec.ipu_vehicle_model_code,
++                                            cur_ipu_rec.ipu_vehicle_make_code,
++                                            cur_ipu_rec.ipu_loc_town,
++                                            cur_ipu_rec.ipu_prop_address,
++                                            cur_ipu_rec.ipu_risk_note,
++                                            cur_ipu_rec.ipu_other_com_charges,
++                                            cur_ipu_rec.ipu_model_yr,
++                                            cur_ipu_rec.ipu_insured_driver,
++                                            cur_ipu_rec.ipu_cert_no,
++                                            -cur_ipu_rec.ipu_lta_endos_com_amt,
++                                            -cur_ipu_rec.ipu_lta_commission,
++                                            cur_ipu_rec.ipu_lta_comm_rate,
++                                            cur_ipu_rec.ipu_maintenance_period_type,
++                                            cur_ipu_rec.ipu_maintenance_period,
++                                            -cur_ipu_rec.ipu_other_client_deductibles,
++                                            -cur_ipu_rec.ipu_coin_other_client_charges,
++                                            cur_ipu_rec.ipu_survey_agnt_code,
++                                            cur_ipu_rec.ipu_survey,
++                                            cur_ipu_rec.ipu_marine_type);
+                     EXCEPTION
+                         WHEN OTHERS
+                         THEN
+@@ -1335,11 +1361,10 @@
+                                 || cur_ipu_rec.ipu_co_phfund);
+                     END;
+ 
++                    --               CONTRA COMMISSION
+                     FOR cur_comm_rec
+                         IN cur_riskcommissions (cur_ipu_rec.ipu_code)
+                     LOOP
+-                        -- DO YOUR INSERTS INTO limits
+-
+                         BEGIN
+                             INSERT INTO gin_policy_risk_commissions (
+                                             PRC_CODE,
+@@ -1441,73 +1466,84 @@
+                                             pil_prev_endr_rate_div_fact,
+                                             pil_prev_endr_mult_rate,
+                                             pil_prev_endr_mult_div_fact,
+-                                            pil_expired)
++                                            pil_expired,
++                                            pil_firstloss,
++                                            pil_firstloss_amt_pcnt,
++                                            pil_firstloss_value)
+                                      VALUES (
+-                                         TO_NUMBER (
+-                                                TO_CHAR (SYSDATE, 'RRRR')
+-                                             || gin_pil_code_seq.NEXTVAL),
+-                                         v_new_ipu_code,
+-                                         cur_limits_rec.pil_sect_code,
+-                                         cur_limits_rec.pil_sect_sht_desc,
+-                                         cur_limits_rec.pil_row_num,
+-                                         cur_limits_rec.pil_calc_group,
+-                                         -NVL (cur_limits_rec.pil_limit_amt,
+-                                               0),
+-                                         cur_limits_rec.pil_prem_rate,
+-                                         -NVL (cur_limits_rec.pil_prem_amt,
+-                                               0),
+-                                         cur_limits_rec.pil_rate_type,
+-                                         cur_limits_rec.pil_rate_desc,
+-                                         cur_limits_rec.pil_sect_type,
+-                                         cur_limits_rec.pil_sect_excess_detail,
+-                                         cur_limits_rec.pil_original_prem_rate,
+-                                         cur_limits_rec.pil_rate_change_remarks,
+-                                         cur_limits_rec.pil_change_done_by,
+-                                         cur_limits_rec.pil_comment,
+-                                         cur_limits_rec.pil_multiplier_rate,
+-                                         cur_limits_rec.pil_multiplier_div_factor,
+-                                         -NVL (
+-                                              cur_limits_rec.pil_annual_premium,
+-                                              0),
+-                                         cur_limits_rec.pil_rate_div_fact,
+-                                         -NVL (
+-                                              cur_limits_rec.pil_min_premium,
+-                                              0),
+-                                         cur_limits_rec.pil_desc,
+-                                         cur_limits_rec.pil_compute,
+-                                         -NVL (cur_limits_rec.pil_used_limit,
+-                                               0),
+-                                         cur_limits_rec.pil_indem_prd,
+-                                         cur_limits_rec.pil_prd_type,
+-                                         cur_limits_rec.pil_indem_fstprd,
+-                                         cur_limits_rec.pil_indem_fstprd_pct,
+-                                         cur_limits_rec.pil_indem_remprd_pct,
+-                                         cur_limits_rec.pil_dual_basis,
+-                                         -NVL (
+-                                              cur_limits_rec.pil_prem_accumulation,
+-                                              0),
+-                                         cur_limits_rec.pil_declaration_section,
+-                                         -NVL (cur_limits_rec.pil_prev_limit,
+-                                               0),
+-                                         -NVL (
+-                                              cur_limits_rec.pil_actual_prem,
+-                                              0),
+-                                         -NVL (
+-                                              cur_limits_rec.pil_prev_prem_prorata,
+-                                              0),
+-                                         -NVL (
+-                                              cur_limits_rec.pil_annual_actual_prem,
+-                                              0),
+-                                         cur_limits_rec.pil_eml_pct,
+-                                         cur_limits_rec.pil_top_loc_rate,
+-                                         cur_limits_rec.pil_top_loc_div_fact,
+-                                         cur_limits_rec.pil_limit_prd,
+-                                         cur_limits_rec.pil_free_limit,
+-                                         cur_limits_rec.pil_prem_rate,
+-                                         cur_limits_rec.pil_rate_div_fact,
+-                                         cur_limits_rec.pil_multiplier_rate,
+-                                         cur_limits_rec.pil_multiplier_div_factor,
+-                                         cur_limits_rec.pil_expired);
++                                                TO_NUMBER (
++                                                       TO_CHAR (SYSDATE,
++                                                                'RRRR')
++                                                    || gin_pil_code_seq.NEXTVAL),
++                                                v_new_ipu_code,
++                                                cur_limits_rec.pil_sect_code,
++                                                cur_limits_rec.pil_sect_sht_desc,
++                                                cur_limits_rec.pil_row_num,
++                                                cur_limits_rec.pil_calc_group,
++                                                -NVL (
++                                                     cur_limits_rec.pil_limit_amt,
++                                                     0),
++                                                cur_limits_rec.pil_prem_rate,
++                                                -NVL (
++                                                     cur_limits_rec.pil_prem_amt,
++                                                     0),
++                                                cur_limits_rec.pil_rate_type,
++                                                cur_limits_rec.pil_rate_desc,
++                                                cur_limits_rec.pil_sect_type,
++                                                cur_limits_rec.pil_sect_excess_detail,
++                                                cur_limits_rec.pil_original_prem_rate,
++                                                cur_limits_rec.pil_rate_change_remarks,
++                                                cur_limits_rec.pil_change_done_by,
++                                                cur_limits_rec.pil_comment,
++                                                cur_limits_rec.pil_multiplier_rate,
++                                                cur_limits_rec.pil_multiplier_div_factor,
++                                                -NVL (
++                                                     cur_limits_rec.pil_annual_premium,
++                                                     0),
++                                                cur_limits_rec.pil_rate_div_fact,
++                                                -NVL (
++                                                     cur_limits_rec.pil_min_premium,
++                                                     0),
++                                                cur_limits_rec.pil_desc,
++                                                cur_limits_rec.pil_compute,
++                                                -NVL (
++                                                     cur_limits_rec.pil_used_limit,
++                                                     0),
++                                                cur_limits_rec.pil_indem_prd,
++                                                cur_limits_rec.pil_prd_type,
++                                                cur_limits_rec.pil_indem_fstprd,
++                                                cur_limits_rec.pil_indem_fstprd_pct,
++                                                cur_limits_rec.pil_indem_remprd_pct,
++                                                cur_limits_rec.pil_dual_basis,
++                                                -NVL (
++                                                     cur_limits_rec.pil_prem_accumulation,
++                                                     0),
++                                                cur_limits_rec.pil_declaration_section,
++                                                -NVL (
++                                                     cur_limits_rec.pil_prev_limit,
++                                                     0),
++                                                -NVL (
++                                                     cur_limits_rec.pil_actual_prem,
++                                                     0),
++                                                -NVL (
++                                                     cur_limits_rec.pil_prev_prem_prorata,
++                                                     0),
++                                                -NVL (
++                                                     cur_limits_rec.pil_annual_actual_prem,
++                                                     0),
++                                                cur_limits_rec.pil_eml_pct,
++                                                cur_limits_rec.pil_top_loc_rate,
++                                                cur_limits_rec.pil_top_loc_div_fact,
++                                                cur_limits_rec.pil_limit_prd,
++                                                cur_limits_rec.pil_free_limit,
++                                                cur_limits_rec.pil_prem_rate,
++                                                cur_limits_rec.pil_rate_div_fact,
++                                                cur_limits_rec.pil_multiplier_rate,
++                                                cur_limits_rec.pil_multiplier_div_factor,
++                                                cur_limits_rec.pil_expired,
++                                                cur_limits_rec.pil_firstloss,
++                                                cur_limits_rec.pil_firstloss_amt_pcnt,
++                                                cur_limits_rec.pil_firstloss_value);
+                         EXCEPTION
+                             WHEN OTHERS
+                             THEN
+@@ -1615,58 +1651,58 @@
+                                             prspr_multiplier_rate,
+                                             prspr_multiplier_div_factor)
+                                      VALUES (
+-                                            TO_CHAR (SYSDATE, 'RRRR')
+-                                         || gin_prspr_code_seq.NEXTVAL,
+-                                         v_batch_no,
+-                                         v_new_ipu_code,
+-                                         cur_rsk_perils_rec.prspr_scl_code,
+-                                         cur_rsk_perils_rec.prspr_sect_code,
+-                                         cur_rsk_perils_rec.prspr_sect_sht_desc,
+-                                         cur_rsk_perils_rec.prspr_per_code,
+-                                         cur_rsk_perils_rec.prspr_per_sht_desc,
+-                                         cur_rsk_perils_rec.prspr_mandatory,
+-                                         cur_rsk_perils_rec.prspr_peril_limit,
+-                                         cur_rsk_perils_rec.prspr_peril_type,
+-                                         cur_rsk_perils_rec.prspr_si_or_limit,
+-                                         cur_rsk_perils_rec.prspr_sec_code,
+-                                         cur_rsk_perils_rec.prspr_excess_type,
+-                                         cur_rsk_perils_rec.prspr_excess,
+-                                         cur_rsk_perils_rec.prspr_excess_min,
+-                                         cur_rsk_perils_rec.prspr_excess_max,
+-                                         cur_rsk_perils_rec.prspr_expire_on_claim,
+-                                         cur_rsk_perils_rec.prspr_bind_code,
+-                                         cur_rsk_perils_rec.prspr_person_limit,
+-                                         cur_rsk_perils_rec.prspr_claim_limit,
+-                                         cur_rsk_perils_rec.prspr_desc,
+-                                         cur_rsk_perils_rec.prspr_bind_type,
+-                                         cur_rsk_perils_rec.prspr_sspr_code,
+-                                         cur_rsk_perils_rec.prspr_salvage_pct,
+-                                         cur_rsk_perils_rec.prspr_claim_excess_type,
+-                                         cur_rsk_perils_rec.prspr_tl_excess_type,
+-                                         cur_rsk_perils_rec.prspr_tl_excess,
+-                                         cur_rsk_perils_rec.prspr_tl_excess_min,
+-                                         cur_rsk_perils_rec.prspr_tl_excess_max,
+-                                         cur_rsk_perils_rec.prspr_pl_excess_type,
+-                                         cur_rsk_perils_rec.prspr_pl_excess,
+-                                         cur_rsk_perils_rec.prspr_pl_excess_min,
+-                                         cur_rsk_perils_rec.prspr_pl_excess_max,
+-                                         cur_rsk_perils_rec.prspr_claim_excess_min,
+-                                         cur_rsk_perils_rec.prspr_claim_excess_max,
+-                                         cur_rsk_perils_rec.prspr_depend_loss_type,
+-                                         cur_rsk_perils_rec.prspr_ttd_ben_pcts,
+-                                         cur_rsk_perils_rec.prspr_ssprm_code,
+-                                         cur_rsk_perils_rec.prspr_prem_rate,
+-                                         -cur_rsk_perils_rec.prspr_premium_amt,
+-                                         NULL,
+-                                         -cur_rsk_perils_rec.prspr_annual_premium,
+-                                         -cur_rsk_perils_rec.prspr_prem_prorata,
+-                                         -cur_rsk_perils_rec.prspr_actual_rate_prem,
+-                                         cur_rsk_perils_rec.prspr_rate_div_fact,
+-                                         -cur_rsk_perils_rec.prspr_free_limit_amt,
+-                                         cur_rsk_perils_rec.prspr_prorata_full,
+-                                         -cur_rsk_perils_rec.prspr_min_premium,
+-                                         cur_rsk_perils_rec.prspr_multiplier_rate,
+-                                         cur_rsk_perils_rec.prspr_multiplier_div_factor);
++                                                   TO_CHAR (SYSDATE, 'RRRR')
++                                                || gin_prspr_code_seq.NEXTVAL,
++                                                v_batch_no,
++                                                v_new_ipu_code,
++                                                cur_rsk_perils_rec.prspr_scl_code,
++                                                cur_rsk_perils_rec.prspr_sect_code,
++                                                cur_rsk_perils_rec.prspr_sect_sht_desc,
++                                                cur_rsk_perils_rec.prspr_per_code,
++                                                cur_rsk_perils_rec.prspr_per_sht_desc,
++                                                cur_rsk_perils_rec.prspr_mandatory,
++                                                cur_rsk_perils_rec.prspr_peril_limit,
++                                                cur_rsk_perils_rec.prspr_peril_type,
++                                                cur_rsk_perils_rec.prspr_si_or_limit,
++                                                cur_rsk_perils_rec.prspr_sec_code,
++                                                cur_rsk_perils_rec.prspr_excess_type,
++                                                cur_rsk_perils_rec.prspr_excess,
++                                                cur_rsk_perils_rec.prspr_excess_min,
++                                                cur_rsk_perils_rec.prspr_excess_max,
++                                                cur_rsk_perils_rec.prspr_expire_on_claim,
++                                                cur_rsk_perils_rec.prspr_bind_code,
++                                                cur_rsk_perils_rec.prspr_person_limit,
++                                                cur_rsk_perils_rec.prspr_claim_limit,
++                                                cur_rsk_perils_rec.prspr_desc,
++                                                cur_rsk_perils_rec.prspr_bind_type,
++                                                cur_rsk_perils_rec.prspr_sspr_code,
++                                                cur_rsk_perils_rec.prspr_salvage_pct,
++                                                cur_rsk_perils_rec.prspr_claim_excess_type,
++                                                cur_rsk_perils_rec.prspr_tl_excess_type,
++                                                cur_rsk_perils_rec.prspr_tl_excess,
++                                                cur_rsk_perils_rec.prspr_tl_excess_min,
++                                                cur_rsk_perils_rec.prspr_tl_excess_max,
++                                                cur_rsk_perils_rec.prspr_pl_excess_type,
++                                                cur_rsk_perils_rec.prspr_pl_excess,
++                                                cur_rsk_perils_rec.prspr_pl_excess_min,
++                                                cur_rsk_perils_rec.prspr_pl_excess_max,
++                                                cur_rsk_perils_rec.prspr_claim_excess_min,
++                                                cur_rsk_perils_rec.prspr_claim_excess_max,
++                                                cur_rsk_perils_rec.prspr_depend_loss_type,
++                                                cur_rsk_perils_rec.prspr_ttd_ben_pcts,
++                                                cur_rsk_perils_rec.prspr_ssprm_code,
++                                                cur_rsk_perils_rec.prspr_prem_rate,
++                                                -cur_rsk_perils_rec.prspr_premium_amt,
++                                                NULL,
++                                                -cur_rsk_perils_rec.prspr_annual_premium,
++                                                -cur_rsk_perils_rec.prspr_prem_prorata,
++                                                -cur_rsk_perils_rec.prspr_actual_rate_prem,
++                                                cur_rsk_perils_rec.prspr_rate_div_fact,
++                                                -cur_rsk_perils_rec.prspr_free_limit_amt,
++                                                cur_rsk_perils_rec.prspr_prorata_full,
++                                                -cur_rsk_perils_rec.prspr_min_premium,
++                                                cur_rsk_perils_rec.prspr_multiplier_rate,
++                                                cur_rsk_perils_rec.prspr_multiplier_div_factor);
+                         EXCEPTION
+                             WHEN OTHERS
+                             THEN
+@@ -1718,13 +1754,13 @@
+                                                          re_excess_max,
+                                                          re_comments)
+                                      VALUES (
+-                                         v_new_ipu_code,
+-                                         risk_excesses_rec.re_excess_rate,
+-                                         risk_excesses_rec.re_excess_type,
+-                                         risk_excesses_rec.re_excess_rate_type,
+-                                         risk_excesses_rec.re_excess_min,
+-                                         risk_excesses_rec.re_excess_max,
+-                                         risk_excesses_rec.re_comments);
++                                                v_new_ipu_code,
++                                                risk_excesses_rec.re_excess_rate,
++                                                risk_excesses_rec.re_excess_type,
++                                                risk_excesses_rec.re_excess_rate_type,
++                                                risk_excesses_rec.re_excess_min,
++                                                risk_excesses_rec.re_excess_max,
++                                                risk_excesses_rec.re_comments);
+                         EXCEPTION
+                             WHEN OTHERS
+                             THEN
+@@ -1742,12 +1778,13 @@
+                                             polrs_pol_batch_no,
+                                             polrs_schedule)
+                                      VALUES (
+-                                            TO_NUMBER (
+-                                                TO_CHAR (SYSDATE, 'RRRR'))
+-                                         || gin_polrs_code_seq.NEXTVAL,
+-                                         v_new_ipu_code,
+-                                         v_batch_no,
+-                                         schedules_rec.polrs_schedule);
++                                                   TO_NUMBER (
++                                                       TO_CHAR (SYSDATE,
++                                                                'RRRR'))
++                                                || gin_polrs_code_seq.NEXTVAL,
++                                                v_new_ipu_code,
++                                                v_batch_no,
++                                                schedules_rec.polrs_schedule);
+                         EXCEPTION
+                             WHEN OTHERS
+                             THEN
+@@ -1800,57 +1837,61 @@
+                                             prrd_earthquake_prem,
+                                             prrd_facoblig_limit)
+                                      VALUES (
+-                                            TO_NUMBER (
+-                                                TO_CHAR (SYSDATE, 'RRRR'))
+-                                         || gin_prrd_code_seq.NEXTVAL,
+-                                         v_new_ipu_code,
+-                                         1,
+-                                         v_tran_no,
+-                                         cur_prrd_rec.prrd_wef,
+-                                         cur_prrd_rec.prrd_wet,
+-                                         'Y',
+-                                         -NVL (
+-                                              cur_prrd_rec.prrd_comp_retention,
+-                                              0),
+-                                         0,
+-                                         /*** to bypass facre trigger**/
+-                                         -NVL (
+-                                              cur_prrd_rec.prrd_gross_comp_retention,
+-                                              0),
+-                                         -NVL (
+-                                              cur_prrd_rec.prrd_facre_amount,
+-                                              0),
+-                                         cur_prrd_rec.prrd_com_retention_rate,
+-                                         cur_prrd_rec.prrd_grp_si_risk_pct,
+-                                         -NVL (cur_prrd_rec.prrd_grp_top_loc,
+-                                               0),
+-                                         -NVL (
+-                                              cur_prrd_rec.prrd_grp_comp_gross_ret,
+-                                              0),
+-                                         -NVL (
+-                                              cur_prrd_rec.prrd_grp_comp_net_ret,
+-                                              0),
+-                                         cur_prrd_rec.prrd_excess_pct,
+-                                         -NVL (cur_prrd_rec.prrd_ri_prem, 0),
+-                                         cur_prrd_rec.prrd_comp_net_rate,
+-                                         cur_prrd_rec.prrd_prorata_days,
+-                                         cur_prrd_rec.prrd_prev_facre_rate,
+-                                         cur_prrd_rec.prrd_refund_prem,
+-                                         cur_prrd_rec.prrd_prev_ret_rate,
+-                                         cur_prrd_rec.prrd_prev_net_rate,
+-                                         cur_prrd_rec.prrd_facre_rate,
+-                                         cur_prrd_rec.prrd_allowed_grs_comp_ret,
+-                                         cur_prrd_rec.prrd_as_uwyr,
+-                                         cur_prrd_rec.prrd_annual_prem,
+-                                         cur_prrd_rec.prrd_cover_days,
+-                                         cur_prrd_rec.prrd_prorata_prem,
+-                                         cur_prrd_rec.prrd_prev_net_retention,
+-                                         cur_prrd_rec.prrd_refund_net_prem,
+-                                         cur_prrd_rec.prrd_refund_facre_prem,
+-                                         -cur_prrd_rec.prrd_net_prem,
+-                                         cur_prrd_rec.prrd_code,
+-                                         -cur_prrd_rec.prrd_earthquake_prem,
+-                                         -cur_prrd_rec.prrd_facoblig_limit);
++                                                   TO_NUMBER (
++                                                       TO_CHAR (SYSDATE,
++                                                                'RRRR'))
++                                                || gin_prrd_code_seq.NEXTVAL,
++                                                v_new_ipu_code,
++                                                1,
++                                                v_tran_no,
++                                                cur_prrd_rec.prrd_wef,
++                                                cur_prrd_rec.prrd_wet,
++                                                'Y',
++                                                -NVL (
++                                                     cur_prrd_rec.prrd_comp_retention,
++                                                     0),
++                                                0,
++                                                /*** to bypass facre trigger**/
++                                                -NVL (
++                                                     cur_prrd_rec.prrd_gross_comp_retention,
++                                                     0),
++                                                -NVL (
++                                                     cur_prrd_rec.prrd_facre_amount,
++                                                     0),
++                                                cur_prrd_rec.prrd_com_retention_rate,
++                                                cur_prrd_rec.prrd_grp_si_risk_pct,
++                                                -NVL (
++                                                     cur_prrd_rec.prrd_grp_top_loc,
++                                                     0),
++                                                -NVL (
++                                                     cur_prrd_rec.prrd_grp_comp_gross_ret,
++                                                     0),
++                                                -NVL (
++                                                     cur_prrd_rec.prrd_grp_comp_net_ret,
++                                                     0),
++                                                cur_prrd_rec.prrd_excess_pct,
++                                                -NVL (
++                                                     cur_prrd_rec.prrd_ri_prem,
++                                                     0),
++                                                cur_prrd_rec.prrd_comp_net_rate,
++                                                cur_prrd_rec.prrd_prorata_days,
++                                                cur_prrd_rec.prrd_prev_facre_rate,
++                                                cur_prrd_rec.prrd_refund_prem,
++                                                cur_prrd_rec.prrd_prev_ret_rate,
++                                                cur_prrd_rec.prrd_prev_net_rate,
++                                                cur_prrd_rec.prrd_facre_rate,
++                                                cur_prrd_rec.prrd_allowed_grs_comp_ret,
++                                                cur_prrd_rec.prrd_as_uwyr,
++                                                cur_prrd_rec.prrd_annual_prem,
++                                                cur_prrd_rec.prrd_cover_days,
++                                                cur_prrd_rec.prrd_prorata_prem,
++                                                cur_prrd_rec.prrd_prev_net_retention,
++                                                cur_prrd_rec.prrd_refund_net_prem,
++                                                cur_prrd_rec.prrd_refund_facre_prem,
++                                                -cur_prrd_rec.prrd_net_prem,
++                                                cur_prrd_rec.prrd_code,
++                                                -cur_prrd_rec.prrd_earthquake_prem,
++                                                -cur_prrd_rec.prrd_facoblig_limit);
+ 
+                             UPDATE gin_insured_property_unds
+                                SET ipu_current_prrd_code =
+@@ -1929,112 +1970,114 @@
+                                                 ptotr_net_less_eq_comm,
+                                                 ptotr_net_less_eq_prem)
+                                          VALUES (
+-                                                TO_NUMBER (
+-                                                    TO_CHAR (SYSDATE, 'RRRR'))
+-                                             || ptotr_code_seq.NEXTVAL,
+-                                             cur_rein_rec.ptotr_risk_cur_code,
+-                                             cur_rein_rec.ptotr_trt_cur_code,
+-                                             cur_rein_rec.ptotr_exch_rate,
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_risk_si_pcur,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_risk_si_tcur,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_risk_prem_pcur,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_risk_prem_tcur,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_trt_si_pcur,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_trt_si_tcur,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_trt_prem_pcur,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_trt_prem_tcur,
+-                                                  0),
+-                                             cur_rein_rec.ptotr_trt_share,
+-                                             cur_rein_rec.ptotr_rei_code,
+-                                             cur_rein_rec.ptotr_trt_code,
+-                                             cur_rein_rec.ptotr_trt_sht_desc,
+-                                             cur_rein_rec.ptotr_clt_scl_code,
+-                                             cur_rein_rec.ptotr_rate,
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_trt_comm_pcur,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_trt_comm_tcur,
+-                                                  0),
+-                                             cur_rein_rec.ptotr_cession_pct,
+-                                             cur_rein_rec.ptotr_property_id,
+-                                             cur_rein_rec.ptotr_uwyr,
+-                                             v_new_ipu_code,
+-                                             v_batch_no,
+-                                             v_pol_no,
+-                                             v_ends_no,
+-                                             cur_rein_rec.ptotr_acpr_sht_desc,
+-                                             cur_rein_rec.ptotr_acpr_code,
+-                                             cur_rein_rec.ptotr_risk_cur_symbol,
+-                                             cur_rein_rec.ptotr_trt_cur_symbol,
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_prem_tax_pcur,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_prem_tax_tcur,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_comm_tax_pcur,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_comm_tax_tcur,
+-                                                  0),
+-                                             cur_rein_rec.ptotr_ta_code,
+-                                             cur_rein_rec.ptotr_as_code,
+-                                             cur_rein_rec.ptotr_sect_code,
+-                                             cur_rein_rec.ptotr_trs_code,
+-                                             cur_rein_rec.ptotr_trs_sht_desc,
+-                                             cur_rein_rec.ptotr_rate_type,
+-                                             cur_rein_rec.ptotr_remarks,
+-                                             v_tran_no,
+-                                             'CO',
+-                                             TRUNC (SYSDATE),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_rprem_tax_pcur,
+-                                                  0),
+-                                             cur_rein_rec.ptotr_actual_si_share,
+-                                             'N',
+-                                                TO_NUMBER (
+-                                                    TO_CHAR (SYSDATE, 'RRRR'))
+-                                             || gin_prrd_code_seq.CURRVAL,
+-                                             cur_rein_rec.ptotr_prev_cession_rate,
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_refund_prem,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_refund_com,
+-                                                  0),
+-                                             cur_rein_rec.ptotr_comm_rate,
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_earthqke_prem,
+-                                                  0),
+-                                             NVL (
+-                                                 cur_rein_rec.ptotr_earthqke_comm_rate,
+-                                                 0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_earthqke_comm,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_net_less_eq_comm,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_rein_rec.ptotr_net_less_eq_prem,
+-                                                  0));
++                                                       TO_NUMBER (
++                                                           TO_CHAR (SYSDATE,
++                                                                    'RRRR'))
++                                                    || ptotr_code_seq.NEXTVAL,
++                                                    cur_rein_rec.ptotr_risk_cur_code,
++                                                    cur_rein_rec.ptotr_trt_cur_code,
++                                                    cur_rein_rec.ptotr_exch_rate,
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_risk_si_pcur,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_risk_si_tcur,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_risk_prem_pcur,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_risk_prem_tcur,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_trt_si_pcur,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_trt_si_tcur,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_trt_prem_pcur,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_trt_prem_tcur,
++                                                         0),
++                                                    cur_rein_rec.ptotr_trt_share,
++                                                    cur_rein_rec.ptotr_rei_code,
++                                                    cur_rein_rec.ptotr_trt_code,
++                                                    cur_rein_rec.ptotr_trt_sht_desc,
++                                                    cur_rein_rec.ptotr_clt_scl_code,
++                                                    cur_rein_rec.ptotr_rate,
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_trt_comm_pcur,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_trt_comm_tcur,
++                                                         0),
++                                                    cur_rein_rec.ptotr_cession_pct,
++                                                    cur_rein_rec.ptotr_property_id,
++                                                    cur_rein_rec.ptotr_uwyr,
++                                                    v_new_ipu_code,
++                                                    v_batch_no,
++                                                    v_pol_no,
++                                                    v_ends_no,
++                                                    cur_rein_rec.ptotr_acpr_sht_desc,
++                                                    cur_rein_rec.ptotr_acpr_code,
++                                                    cur_rein_rec.ptotr_risk_cur_symbol,
++                                                    cur_rein_rec.ptotr_trt_cur_symbol,
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_prem_tax_pcur,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_prem_tax_tcur,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_comm_tax_pcur,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_comm_tax_tcur,
++                                                         0),
++                                                    cur_rein_rec.ptotr_ta_code,
++                                                    cur_rein_rec.ptotr_as_code,
++                                                    cur_rein_rec.ptotr_sect_code,
++                                                    cur_rein_rec.ptotr_trs_code,
++                                                    cur_rein_rec.ptotr_trs_sht_desc,
++                                                    cur_rein_rec.ptotr_rate_type,
++                                                    cur_rein_rec.ptotr_remarks,
++                                                    v_tran_no,
++                                                    'CO',
++                                                    TRUNC (SYSDATE),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_rprem_tax_pcur,
++                                                         0),
++                                                    cur_rein_rec.ptotr_actual_si_share,
++                                                    'N',
++                                                       TO_NUMBER (
++                                                           TO_CHAR (SYSDATE,
++                                                                    'RRRR'))
++                                                    || gin_prrd_code_seq.CURRVAL,
++                                                    cur_rein_rec.ptotr_prev_cession_rate,
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_refund_prem,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_refund_com,
++                                                         0),
++                                                    cur_rein_rec.ptotr_comm_rate,
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_earthqke_prem,
++                                                         0),
++                                                    NVL (
++                                                        cur_rein_rec.ptotr_earthqke_comm_rate,
++                                                        0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_earthqke_comm,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_net_less_eq_comm,
++                                                         0),
++                                                    -NVL (
++                                                         cur_rein_rec.ptotr_net_less_eq_prem,
++                                                         0));
+                             EXCEPTION
+                                 WHEN OTHERS
+                                 THEN
+@@ -2090,80 +2133,83 @@
+                                                     part_prev_com,
+                                                     part_trpa_code)
+                                              VALUES (
+-                                                    TO_NUMBER (
+-                                                        TO_CHAR (SYSDATE,
+-                                                                 'RRRR'))
+-                                                 || gin_part_code_seq.NEXTVAL,
+-                                                 cur_part_rec.part_cede_rate,
+-                                                 -NVL (
+-                                                      cur_part_rec.part_si_amt_pcur,
+-                                                      0),
+-                                                 -NVL (
+-                                                      cur_part_rec.part_si_amt_tcur,
+-                                                      0),
+-                                                 -NVL (
+-                                                      cur_part_rec.part_comm_amt_pcur,
+-                                                      0),
+-                                                 -NVL (
+-                                                      cur_part_rec.part_comm_amt_tcur,
+-                                                      0),
+-                                                 -NVL (
+-                                                      cur_part_rec.part_prem_amt_pcur,
+-                                                      0),
+-                                                 -NVL (
+-                                                      cur_part_rec.part_prem_amt_tcur,
+-                                                      0),
+-                                                 cur_part_rec.part_trt_code,
+-                                                 cur_part_rec.part_trt_sht_desc,
+-                                                 cur_part_rec.part_agnt_agent_code,
+-                                                 cur_part_rec.part_agnt_sht_desc,
+-                                                    TO_NUMBER (
+-                                                        TO_CHAR (SYSDATE,
+-                                                                 'RRRR'))
+-                                                 || ptotr_code_seq.CURRVAL,
+-                                                 cur_part_rec.part_rei_code,
+-                                                 cur_part_rec.part_pol_cur_code,
+-                                                 cur_part_rec.part_pol_cur_symbol,
+-                                                 cur_part_rec.part_uwyr,
+-                                                 v_batch_no,
+-                                                 cur_part_rec.part_pol_policy_no,
+-                                                 v_ends_no,
+-                                                 v_new_ipu_code,
+-                                                 -NVL (
+-                                                      cur_part_rec.part_rprem_tax_pcur,
+-                                                      0),
+-                                                 -NVL (
+-                                                      cur_part_rec.part_rprem_tax_tcur,
+-                                                      0),
+-                                                 -NVL (
+-                                                      cur_part_rec.part_prem_tax_pcur,
+-                                                      0),
+-                                                 -NVL (
+-                                                      cur_part_rec.part_prem_tax_tcur,
+-                                                      0),
+-                                                 cur_part_rec.part_ta_code,
+-                                                 cur_part_rec.part_as_code,
+-                                                 cur_part_rec.part_fiscal_year,
+-                                                 cur_part_rec.part_acpr_code,
+-                                                 cur_part_rec.part_acpr_sht_desc,
+-                                                 cur_part_rec.part_acc_posted,
+-                                                 cur_part_rec.part_trs_code,
+-                                                 cur_part_rec.part_trs_sht_desc,
+-                                                 cur_part_rec.part_scl_code,
+-                                                 v_tran_no,
+-                                                 'CO',
+-                                                    TO_NUMBER (
+-                                                        TO_CHAR (SYSDATE,
+-                                                                 'RRRR'))
+-                                                 || gin_prrd_code_seq.CURRVAL,
+-                                                 cur_part_rec.part_prev_cede_rate,
+-                                                 -NVL (
+-                                                      cur_part_rec.part_refund_prem,
+-                                                      0),
+-                                                 -NVL (
+-                                                      cur_part_rec.part_prev_com,
+-                                                      0),
+-                                                 cur_part_rec.part_trpa_code);
++                                                           TO_NUMBER (
++                                                               TO_CHAR (
++                                                                   SYSDATE,
++                                                                   'RRRR'))
++                                                        || gin_part_code_seq.NEXTVAL,
++                                                        cur_part_rec.part_cede_rate,
++                                                        -NVL (
++                                                             cur_part_rec.part_si_amt_pcur,
++                                                             0),
++                                                        -NVL (
++                                                             cur_part_rec.part_si_amt_tcur,
++                                                             0),
++                                                        -NVL (
++                                                             cur_part_rec.part_comm_amt_pcur,
++                                                             0),
++                                                        -NVL (
++                                                             cur_part_rec.part_comm_amt_tcur,
++                                                             0),
++                                                        -NVL (
++                                                             cur_part_rec.part_prem_amt_pcur,
++                                                             0),
++                                                        -NVL (
++                                                             cur_part_rec.part_prem_amt_tcur,
++                                                             0),
++                                                        cur_part_rec.part_trt_code,
++                                                        cur_part_rec.part_trt_sht_desc,
++                                                        cur_part_rec.part_agnt_agent_code,
++                                                        cur_part_rec.part_agnt_sht_desc,
++                                                           TO_NUMBER (
++                                                               TO_CHAR (
++                                                                   SYSDATE,
++                                                                   'RRRR'))
++                                                        || ptotr_code_seq.CURRVAL,
++                                                        cur_part_rec.part_rei_code,
++                                                        cur_part_rec.part_pol_cur_code,
++                                                        cur_part_rec.part_pol_cur_symbol,
++                                                        cur_part_rec.part_uwyr,
++                                                        v_batch_no,
++                                                        cur_part_rec.part_pol_policy_no,
++                                                        v_ends_no,
++                                                        v_new_ipu_code,
++                                                        -NVL (
++                                                             cur_part_rec.part_rprem_tax_pcur,
++                                                             0),
++                                                        -NVL (
++                                                             cur_part_rec.part_rprem_tax_tcur,
++                                                             0),
++                                                        -NVL (
++                                                             cur_part_rec.part_prem_tax_pcur,
++                                                             0),
++                                                        -NVL (
++                                                             cur_part_rec.part_prem_tax_tcur,
++                                                             0),
++                                                        cur_part_rec.part_ta_code,
++                                                        cur_part_rec.part_as_code,
++                                                        cur_part_rec.part_fiscal_year,
++                                                        cur_part_rec.part_acpr_code,
++                                                        cur_part_rec.part_acpr_sht_desc,
++                                                        cur_part_rec.part_acc_posted,
++                                                        cur_part_rec.part_trs_code,
++                                                        cur_part_rec.part_trs_sht_desc,
++                                                        cur_part_rec.part_scl_code,
++                                                        v_tran_no,
++                                                        'CO',
++                                                           TO_NUMBER (
++                                                               TO_CHAR (
++                                                                   SYSDATE,
++                                                                   'RRRR'))
++                                                        || gin_prrd_code_seq.CURRVAL,
++                                                        cur_part_rec.part_prev_cede_rate,
++                                                        -NVL (
++                                                             cur_part_rec.part_refund_prem,
++                                                             0),
++                                                        -NVL (
++                                                             cur_part_rec.part_prev_com,
++                                                             0),
++                                                        cur_part_rec.part_trpa_code);
+                                 EXCEPTION
+                                     WHEN OTHERS
+                                     THEN
+@@ -2173,168 +2219,6 @@
+                                 END;
+                             END LOOP;                               --cur_part
+                         END LOOP;                                   --cur_rein
+-
+-                        FOR cur_reinxol_rec
+-                            IN cur_xol (cur_prrd_rec.prrd_code)
+-                        LOOP
+-                            BEGIN
+-                                INSERT INTO gin_pol_rein_xol_risk_details (
+-                                                PRXRD_CODE,
+-                                                PRXRD_RISK_PREM_AMT,
+-                                                PRXRD_RISK_OWN_RET_AMT,
+-                                                PRXRD_CUR_CODE,
+-                                                PRXRD_EXCH_RATE,
+-                                                PRPRD_XAS_CODE,
+-                                                PRXRD_REIN_XOL_RATE,
+-                                                PRXRD_IPU_CODE,
+-                                                PRXRD_SCL_CODE,
+-                                                PRXRD_POL_BATCH_NO,
+-                                                PRXRD_REIN_XOL_AMT,
+-                                                PRXRD_REIN_XOL_COMM_RATE,
+-                                                PRXRD_REIN_XOL_VAT_RATE,
+-                                                PRXRD_REIN_XOL_COMM_AMT,
+-                                                PRXRD_REIN_XOL_VAT_AMT,
+-                                                PRXRD_PREV_PRXRD_CODE,
+-                                                PRXRD_GGT_TRAN_NO,
+-                                                PRXRD_PROPERTY_ID,
+-                                                PRXRD_UWYR,
+-                                                PRXRD_POL_REN_ENDOS_NO,
+-                                                PRXRD_DATE,
+-                                                PRXRD_RISK_TRT_OWN_RET_AMT,
+-                                                PRXRD_XOLS_CODE,
+-                                                PRXRD_XOL_NET_AMT,
+-                                                PRXRD_REFUND_PREM,
+-                                                PRXRD_REFUND_COMM,
+-                                                PRXRD_PRRD_CODE,
+-                                                PRXRD_XOL_SI,
+-                                                PRXRD_PREV_XOL_AMT,
+-                                                PRXRD_PREV_XOL_COMM_RATE,
+-                                                PRXRD_PREV_XOL_RATE)
+-                                     VALUES (
+-                                         TO_NUMBER (
+-                                                TO_CHAR (SYSDATE, 'YYYY')
+-                                             || gin_prxrd_code_seq.NEXTVAL),
+-                                         -cur_reinxol_rec.PRXRD_RISK_PREM_AMT,
+-                                         -cur_reinxol_rec.PRXRD_RISK_OWN_RET_AMT,
+-                                         cur_reinxol_rec.PRXRD_CUR_CODE,
+-                                         cur_reinxol_rec.PRXRD_EXCH_RATE,
+-                                         cur_reinxol_rec.PRPRD_XAS_CODE,
+-                                         cur_reinxol_rec.PRXRD_REIN_XOL_RATE,
+-                                         v_new_ipu_code,
+-                                         cur_reinxol_rec.PRXRD_SCL_CODE,
+-                                         v_batch_no,
+-                                         -cur_reinxol_rec.PRXRD_REIN_XOL_AMT,
+-                                         cur_reinxol_rec.PRXRD_REIN_XOL_COMM_RATE,
+-                                         cur_reinxol_rec.PRXRD_REIN_XOL_VAT_RATE,
+-                                         -cur_reinxol_rec.PRXRD_REIN_XOL_COMM_AMT,
+-                                         -cur_reinxol_rec.PRXRD_REIN_XOL_VAT_AMT,
+-                                         cur_reinxol_rec.PRXRD_CODE,
+-                                         v_tran_no,
+-                                         cur_reinxol_rec.PRXRD_PROPERTY_ID,
+-                                         cur_reinxol_rec.PRXRD_UWYR,
+-                                         v_ends_no,
+-                                         cur_reinxol_rec.PRXRD_DATE,
+-                                         -cur_reinxol_rec.PRXRD_RISK_TRT_OWN_RET_AMT,
+-                                         cur_reinxol_rec.PRXRD_XOLS_CODE,
+-                                         -cur_reinxol_rec.PRXRD_XOL_NET_AMT,
+-                                         -cur_reinxol_rec.PRXRD_REFUND_PREM,
+-                                         -cur_reinxol_rec.PRXRD_REFUND_COMM,
+-                                            TO_NUMBER (
+-                                                TO_CHAR (SYSDATE, 'RRRR'))
+-                                         || gin_prrd_code_seq.CURRVAL,
+-                                         -cur_reinxol_rec.PRXRD_XOL_SI,
+-                                         cur_reinxol_rec.PRXRD_PREV_XOL_AMT,
+-                                         cur_reinxol_rec.PRXRD_PREV_XOL_COMM_RATE,
+-                                         cur_reinxol_rec.PRXRD_PREV_XOL_RATE)
+-                                  RETURNING PRXRD_CODE
+-                                       INTO v_part_prxrd_code;
+-                            EXCEPTION
+-                                WHEN OTHERS
+-                                THEN
+-                                    ROLLBACK;
+-                                    raise_error (
+-                                        ' Unable to insert treaty cession details...');
+-                            END;
+-
+-                            FOR curxol_part
+-                                IN curxol_participants (
+-                                       cur_reinxol_rec.PRXRD_CODE)
+-                            LOOP
+-                                BEGIN
+-                                    INSERT INTO gin_xol_participations (
+-                                                    XPART_CODE,
+-                                                    XPART_CEDE_RATE,
+-                                                    XPART_SI_AMT_PCUR,
+-                                                    XPART_SI_AMT_TCUR,
+-                                                    XPART_COMM_AMT_PCUR,
+-                                                    XPART_COMM_AMT_TCUR,
+-                                                    XPART_PREM_AMT_PCUR,
+-                                                    XPART_PREM_AMT_TCUR,
+-                                                    XPART_XOLS_CODE,
+-                                                    XPART_AGNT_AGENT_CODE,
+-                                                    XPART_AGNT_SHT_DESC,
+-                                                    XPART_PRXRD_CODE,
+-                                                    XPART_XAS_CODE,
+-                                                    XPART_POL_CUR_CODE,
+-                                                    XPART_POL_CUR_SYMBOL,
+-                                                    XPART_UWYR,
+-                                                    XPART_POL_BATCH_NO,
+-                                                    XPART_POL_POLICY_NO,
+-                                                    XPART_POL_REN_ENDOS_NO,
+-                                                    XPART_IPU_CODE,
+-                                                    XPART_FISCAL_YEAR,
+-                                                    XPART_SCL_CODE,
+-                                                    XPART_GGT_TRAN_NO,
+-                                                    XPART_TRAN_TYPE,
+-                                                    XPART_PRRD_CODE,
+-                                                    XPART_PREV_CEDE_RATE,
+-                                                    XPART_XOLP_CODE,
+-                                                    XPART_TRT_PREM_TAX_PCUR,
+-                                                    XPART_TRPA_REI_PREM_TAXABLE,
+-                                                    XPART_ACC_POSTED)
+-                                             VALUES (
+-                                                 GIN_XPART_CODE_SEQ.NEXTVAL,
+-                                                 curxol_part.XPART_CEDE_RATE,
+-                                                 -curxol_part.XPART_SI_AMT_PCUR,
+-                                                 -curxol_part.XPART_SI_AMT_TCUR,
+-                                                 -curxol_part.XPART_COMM_AMT_PCUR,
+-                                                 -curxol_part.XPART_COMM_AMT_TCUR,
+-                                                 -curxol_part.XPART_PREM_AMT_PCUR,
+-                                                 -curxol_part.XPART_PREM_AMT_TCUR,
+-                                                 curxol_part.XPART_XOLS_CODE,
+-                                                 curxol_part.XPART_AGNT_AGENT_CODE,
+-                                                 curxol_part.XPART_AGNT_SHT_DESC,
+-                                                 v_part_prxrd_code, -- curxol_part.XPART_PRXRD_CODE,
+-                                                 curxol_part.XPART_XAS_CODE,
+-                                                 curxol_part.XPART_POL_CUR_CODE,
+-                                                 curxol_part.XPART_POL_CUR_SYMBOL,
+-                                                 curxol_part.XPART_UWYR,
+-                                                 v_batch_no,
+-                                                 curxol_part.XPART_POL_POLICY_NO,
+-                                                 v_ends_no,
+-                                                 v_new_ipu_code,
+-                                                 curxol_part.XPART_FISCAL_YEAR,
+-                                                 curxol_part.XPART_SCL_CODE,
+-                                                 v_tran_no,
+-                                                 'CO',
+-                                                    TO_NUMBER (
+-                                                        TO_CHAR (SYSDATE,
+-                                                                 'RRRR'))
+-                                                 || gin_prrd_code_seq.CURRVAL,
+-                                                 curxol_part.XPART_PREV_CEDE_RATE,
+-                                                 curxol_part.XPART_XOLP_CODE,
+-                                                 -curxol_part.XPART_TRT_PREM_TAX_PCUR,
+-                                                 curxol_part.XPART_TRPA_REI_PREM_TAXABLE,
+-                                                 curxol_part.XPART_ACC_POSTED);
+-                                EXCEPTION
+-                                    WHEN OTHERS
+-                                    THEN
+-                                        ROLLBACK;
+-                                        raise_error (
+-                                            ' Unable to insert treaty cession participation details...');
+-                                END;
+-                            END LOOP;                               --cur_part
+-                        END LOOP;
+ 
+                         FOR cur_facre_rec
+                             IN cur_facre (cur_prrd_rec.prrd_code)
+@@ -2380,51 +2264,56 @@
+                                                 fc_vat_rate,
+                                                 fc_vat_amt)
+                                          VALUES (
+-                                                TO_NUMBER (
+-                                                    TO_CHAR (SYSDATE, 'RRRR'))
+-                                             || gin_fc_code_seq.NEXTVAL,
+-                                             cur_facre_rec.fc_agnt_agent_code,
+-                                             -NVL (cur_facre_rec.fc_amount,
+-                                                   0),
+-                                             cur_facre_rec.fc_wef,
+-                                             v_new_ipu_code,
+-                                             cur_facre_rec.fc_agent_sht_desc,
+-                                             cur_facre_rec.fc_rate,
+-                                             cur_facre_rec.fc_comm_rate,
+-                                             -NVL (cur_facre_rec.fc_comm_amt,
+-                                                   0),
+-                                             v_user,
+-                                             cur_facre_rec.fc_dc_no,
+-                                             -NVL (cur_facre_rec.fc_prem_amt,
+-                                                   0),
+-                                             v_batch_no,
+-                                             cur_facre_rec.fc_uwyr,
+-                                             v_tran_no,
+-                                             'CO',
+-                                             cur_facre_rec.fc_scl_code,
+-                                             cur_facre_rec.fc_amt_or_rate,
+-                                                TO_NUMBER (
+-                                                    TO_CHAR (SYSDATE, 'RRRR'))
+-                                             || gin_prrd_code_seq.CURRVAL,
+-                                             cur_facre_rec.fc_code,
+-                                             -cur_facre_rec.fc_earthqke_prem,
+-                                             cur_facre_rec.fc_earthqke_comm_rate,
+-                                             -cur_facre_rec.fc_earthqke_comm,
+-                                             -cur_facre_rec.fc_net_less_eq_comm,
+-                                             -cur_facre_rec.fc_net_less_eq_prem,
+-                                             cur_facre_rec.fc_accepted,
+-                                             cur_facre_rec.fc_facre_type,
+-                                             cur_facre_rec.fc_accepted_date,
+-                                             -cur_facre_rec.fc_prem_diff_amt,
+-                                             cur_facre_rec.fc_remark,
+-                                             cur_facre_rec.fc_mngmnt_type,
+-                                             cur_facre_rec.fc_mngmnt_value,
+-                                             cur_facre_rec.fc_rein_tax_type,
+-                                             cur_facre_rec.fc_rein_tax_value,
+-                                             -cur_facre_rec.fc_rein_tax_amt,
+-                                             -cur_facre_rec.fc_mngmnt_amt,
+-                                             cur_facre_rec.fc_vat_rate,
+-                                             -cur_facre_rec.fc_vat_amt);
++                                                       TO_NUMBER (
++                                                           TO_CHAR (SYSDATE,
++                                                                    'RRRR'))
++                                                    || gin_fc_code_seq.NEXTVAL,
++                                                    cur_facre_rec.fc_agnt_agent_code,
++                                                    -NVL (
++                                                         cur_facre_rec.fc_amount,
++                                                         0),
++                                                    cur_facre_rec.fc_wef,
++                                                    v_new_ipu_code,
++                                                    cur_facre_rec.fc_agent_sht_desc,
++                                                    cur_facre_rec.fc_rate,
++                                                    cur_facre_rec.fc_comm_rate,
++                                                    -NVL (
++                                                         cur_facre_rec.fc_comm_amt,
++                                                         0),
++                                                    v_user,
++                                                    cur_facre_rec.fc_dc_no,
++                                                    -NVL (
++                                                         cur_facre_rec.fc_prem_amt,
++                                                         0),
++                                                    v_batch_no,
++                                                    cur_facre_rec.fc_uwyr,
++                                                    v_tran_no,
++                                                    'CO',
++                                                    cur_facre_rec.fc_scl_code,
++                                                    cur_facre_rec.fc_amt_or_rate,
++                                                       TO_NUMBER (
++                                                           TO_CHAR (SYSDATE,
++                                                                    'RRRR'))
++                                                    || gin_prrd_code_seq.CURRVAL,
++                                                    cur_facre_rec.fc_code,
++                                                    -cur_facre_rec.fc_earthqke_prem,
++                                                    cur_facre_rec.fc_earthqke_comm_rate,
++                                                    -cur_facre_rec.fc_earthqke_comm,
++                                                    -cur_facre_rec.fc_net_less_eq_comm,
++                                                    -cur_facre_rec.fc_net_less_eq_prem,
++                                                    cur_facre_rec.fc_accepted,
++                                                    cur_facre_rec.fc_facre_type,
++                                                    cur_facre_rec.fc_accepted_date,
++                                                    -cur_facre_rec.fc_prem_diff_amt,
++                                                    cur_facre_rec.fc_remark,
++                                                    cur_facre_rec.fc_mngmnt_type,
++                                                    cur_facre_rec.fc_mngmnt_value,
++                                                    cur_facre_rec.fc_rein_tax_type,
++                                                    cur_facre_rec.fc_rein_tax_value,
++                                                    -cur_facre_rec.fc_rein_tax_amt,
++                                                    -cur_facre_rec.fc_mngmnt_amt,
++                                                    cur_facre_rec.fc_vat_rate,
++                                                    -cur_facre_rec.fc_vat_amt);
+                             EXCEPTION
+                                 WHEN OTHERS
+                                 THEN
+@@ -2473,52 +2362,53 @@
+                                                 prprd_pta_code,
+                                                 prprd_pool_si)
+                                          VALUES (
+-                                             v_prrd_code,
+-                                             -NVL (
+-                                                  cur_cur_pool_rec.prprd_risk_prem_amt,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_cur_pool_rec.prprd_risk_own_ret_amt,
+-                                                  0),
+-                                             cur_cur_pool_rec.prprd_risk_cur_code,
+-                                             cur_cur_pool_rec.prprd_risk_exch_rate,
+-                                             cur_cur_pool_rec.prprd_scrpr_code,
+-                                             NVL (
+-                                                 cur_cur_pool_rec.prprd_rein_pool_rate,
+-                                                 0),
+-                                             v_new_ipu_code,
+-                                             cur_cur_pool_rec.prprd_scl_code,
+-                                             cur_cur_pool_rec.prprd_covt_code,
+-                                             v_batch_no,
+-                                             -NVL (
+-                                                  cur_cur_pool_rec.prprd_rein_pool_amt,
+-                                                  0),
+-                                             NVL (
+-                                                 cur_cur_pool_rec.prprd_rein_pool_comm_rate,
+-                                                 0),
+-                                             NVL (
+-                                                 cur_cur_pool_rec.prprd_rein_pool_vat_rate,
+-                                                 0),
+-                                             -NVL (
+-                                                  cur_cur_pool_rec.prprd_rein_pool_comm_amt,
+-                                                  0),
+-                                             -NVL (
+-                                                  cur_cur_pool_rec.prprd_rein_pool_vat_amt,
+-                                                  0),
+-                                             cur_cur_pool_rec.prprd_code,
+-                                             v_tran_no,
+-                                             cur_cur_pool_rec.prprd_property_id,
+-                                             cur_cur_pool_rec.prprd_uwyr,
+-                                             v_ends_no,
+-                                             SYSDATE,
+-                                             -NVL (
+-                                                  cur_cur_pool_rec.prprd_risk_trt_own_ret_amt,
+-                                                  0),
+-                                                TO_NUMBER (
+-                                                    TO_CHAR (SYSDATE, 'RRRR'))
+-                                             || gin_prrd_code_seq.CURRVAL,
+-                                             cur_cur_pool_rec.prprd_pta_code,
+-                                             -cur_cur_pool_rec.prprd_pool_si);
++                                                    v_prrd_code,
++                                                    -NVL (
++                                                         cur_cur_pool_rec.prprd_risk_prem_amt,
++                                                         0),
++                                                    -NVL (
++                                                         cur_cur_pool_rec.prprd_risk_own_ret_amt,
++                                                         0),
++                                                    cur_cur_pool_rec.prprd_risk_cur_code,
++                                                    cur_cur_pool_rec.prprd_risk_exch_rate,
++                                                    cur_cur_pool_rec.prprd_scrpr_code,
++                                                    NVL (
++                                                        cur_cur_pool_rec.prprd_rein_pool_rate,
++                                                        0),
++                                                    v_new_ipu_code,
++                                                    cur_cur_pool_rec.prprd_scl_code,
++                                                    cur_cur_pool_rec.prprd_covt_code,
++                                                    v_batch_no,
++                                                    -NVL (
++                                                         cur_cur_pool_rec.prprd_rein_pool_amt,
++                                                         0),
++                                                    NVL (
++                                                        cur_cur_pool_rec.prprd_rein_pool_comm_rate,
++                                                        0),
++                                                    NVL (
++                                                        cur_cur_pool_rec.prprd_rein_pool_vat_rate,
++                                                        0),
++                                                    -NVL (
++                                                         cur_cur_pool_rec.prprd_rein_pool_comm_amt,
++                                                         0),
++                                                    -NVL (
++                                                         cur_cur_pool_rec.prprd_rein_pool_vat_amt,
++                                                         0),
++                                                    cur_cur_pool_rec.prprd_code,
++                                                    v_tran_no,
++                                                    cur_cur_pool_rec.prprd_property_id,
++                                                    cur_cur_pool_rec.prprd_uwyr,
++                                                    v_ends_no,
++                                                    SYSDATE,
++                                                    -NVL (
++                                                         cur_cur_pool_rec.prprd_risk_trt_own_ret_amt,
++                                                         0),
++                                                       TO_NUMBER (
++                                                           TO_CHAR (SYSDATE,
++                                                                    'RRRR'))
++                                                    || gin_prrd_code_seq.CURRVAL,
++                                                    cur_cur_pool_rec.prprd_pta_code,
++                                                    -cur_cur_pool_rec.prprd_pool_si);
+                             EXCEPTION
+                                 WHEN OTHERS
+                                 THEN
+@@ -2530,5 +2420,4 @@
+                 END LOOP;                                        --cur_ipu_rec
+             END LOOP;                                       --cur_insureds_rec
+         END LOOP;                                                --cur_pol_rec
+-    END;--chkcontra
+---31/05/2020--NEW FOR PA
++    END;

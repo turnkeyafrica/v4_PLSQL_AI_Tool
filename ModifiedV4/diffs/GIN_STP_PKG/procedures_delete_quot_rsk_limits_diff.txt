@@ -1,0 +1,19 @@
+--- GIN_STP_PKG_HERITAGE_procedures_delete_quot_rsk_limits.sql
++++ GIN_STP_PKG_NEW_GEMINIA_procedures_delete_quot_rsk_limits.sql
+@@ -1,9 +1,7 @@
+-PROCEDURE delete_quot_rsk_limits (
+-      v_qr_code   IN   NUMBER
+-   )
+-   IS
+-   BEGIN
+-     DELETE gin_quot_risk_limits
+-     WHERE qrl_qr_code=v_qr_code
+-     AND qrl_sect_type   IN('SC','CC','VA');
+-   END;
++PROCEDURE delete_quot_rsk_limits (v_qr_code IN NUMBER)
++    IS
++    BEGIN
++        DELETE gin_quot_risk_limits
++         WHERE     qrl_qr_code = v_qr_code
++               AND qrl_sect_type IN ('SC', 'CC', 'VA');
++    END;

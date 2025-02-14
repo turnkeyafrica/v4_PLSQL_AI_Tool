@@ -1,0 +1,34 @@
+--- GIN_STP_PKG_HERITAGE_functions_merge_ren_policies_text.sql
++++ GIN_STP_PKG_NEW_GEMINIA_functions_merge_ren_policies_text.sql
+@@ -1,17 +1,14 @@
+-FUNCTION merge_ren_policies_text (
+-      v_pol_batch_no   IN   NUMBER,
+-      v_raw_txt        IN   VARCHAR2
+-   )
+-      RETURN VARCHAR2
+-   IS
+-      v_text   VARCHAR2 (4000);
+-   BEGIN
+-      v_text :=
+-         tqc_memo_web_pkg.process_gis_pol_memo (v_pol_batch_no,
+-                                                NULL,
+-                                                NULL,
+-                                                v_raw_txt,
+-                                                'R'
+-                                               );
+-      RETURN (v_text);
+-   END;
++FUNCTION merge_ren_policies_text (v_pol_batch_no   IN NUMBER,
++                                      v_raw_txt        IN VARCHAR2)
++        RETURN VARCHAR2
++    IS
++        v_text   VARCHAR2 (4000);
++    BEGIN
++        v_text :=
++            tqc_memo_web_pkg.process_gis_pol_memo (v_pol_batch_no,
++                                                   NULL,
++                                                   NULL,
++                                                   v_raw_txt,
++                                                   'R');
++        RETURN (v_text);
++    END;

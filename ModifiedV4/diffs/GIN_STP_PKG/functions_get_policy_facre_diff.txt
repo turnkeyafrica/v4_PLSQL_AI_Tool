@@ -1,0 +1,35 @@
+--- GIN_STP_PKG_HERITAGE_functions_get_policy_facre.sql
++++ GIN_STP_PKG_NEW_GEMINIA_functions_get_policy_facre.sql
+@@ -1,19 +1,20 @@
+-FUNCTION  get_policy_facre(v_batch_no in number) return NUMBER 
++FUNCTION get_policy_facre (v_batch_no IN NUMBER)
++        RETURN NUMBER
+     IS
+-   
+-    v_count NUMBER;
+-BEGIN
++        v_count   NUMBER;
++    BEGIN
+         BEGIN
+-
+-              SELECT COUNT (1)
++            SELECT COUNT (1)
+               INTO v_count
+               FROM gin_policies
+              WHERE pol_policy_type = 'F' AND pol_batch_no = v_batch_no;
+- 
+-            RETURN UPPER(v_count);
++
++            RETURN UPPER (v_count);
+         EXCEPTION
+-                WHEN OTHERS THEN 
+-                    RAISE_APPLICATION_ERROR(-20001,'This policy is not a Facre business....');
+-                
++            WHEN OTHERS
++            THEN
++                raise_application_error (
++                    -20001,
++                    'This policy is not a Facre business....');
+         END;
+-END;
++    END;
